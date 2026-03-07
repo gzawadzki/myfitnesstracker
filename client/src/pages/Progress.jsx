@@ -4,6 +4,7 @@ import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
+import ExercisePicker from '../components/ExercisePicker';
 
 export default function Progress() {
   const { db } = useData();
@@ -36,6 +37,7 @@ export default function Progress() {
 
   const chartData = buildChartData(selectedExUrlId);
   const selectedEx = db.exercises[selectedExUrlId];
+  const exerciseOptions = Object.values(db.exercises || {}).sort((a, b) => a.name.localeCompare(b.name));
 
   // 1. Calculate Real Metric Cards Data
   const totalWorkouts = db.sessions ? db.sessions.length : 0;
@@ -108,15 +110,12 @@ export default function Progress() {
       <h2 className="h3 mb-4">Exercise Progress</h2>
       
       <div className="mb-4 flex items-center justify-between gap-2">
-        <select 
-          className="text-sm font-medium flex-1" 
-          value={selectedExUrlId}
-          onChange={e => setSelectedExUrlId(e.target.value)}
-        >
-          {Object.values(db.exercises).map(ex => (
-            <option key={ex.id} value={ex.id}>{ex.name}</option>
-          ))}
-        </select>
+        <ExercisePicker
+          exercises={exerciseOptions}
+          selectedExerciseId={selectedExUrlId}
+          onSelect={setSelectedExUrlId}
+          title="Choose exercise"
+        />
         
         <div className="flex rounded-md p-1" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
           <button 
