@@ -48,8 +48,9 @@ function BottomNav() {
 function Dashboard() {
   const { db, saveDailyHealthMetric } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(() => !!localStorage.getItem('gfit_token'));
   const [googleLoading, setGoogleLoading] = useState(false);
+  const [syncStatus, setSyncStatus] = useState(null); // 'success' | 'error' | null
 
   // Get today's local date string (YYYY-MM-DD)
   const todayRaw = new Date();
@@ -66,29 +67,49 @@ function Dashboard() {
   const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
   const weightDelta = (weight && prevWeight) ? (weight - prevWeight).toFixed(1) : null;
 
+  // Shared sync function — works with any valid token
+  const syncGoogleFit = async (token) => {
+    setGoogleLoading(true);
+    setSyncStatus(null);
+    try {
+      const dailyResults = await fetchGoogleFitData(token, 7);
+      for (const day of dailyResults) {
+        if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
+        if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
+        if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
+      }
+      setSyncStatus('success');
+      setTimeout(() => setSyncStatus(null), 3000);
+    } catch (err) {
+      console.error("Google Fit sync failed:", err);
+      // Token probably expired — clear it so user re-auths
+      localStorage.removeItem('gfit_token');
+      setIsGoogleConnected(false);
+      setSyncStatus('error');
+    } finally {
+      setGoogleLoading(false);
+    }
+  };
+
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      try {
-        setGoogleLoading(true);
-        // fetchGoogleFitData now returns an array of { date, steps, sleepHours, weightKg }
-        const dailyResults = await fetchGoogleFitData(tokenResponse.access_token, 7);
-        
-        for (const day of dailyResults) {
-          if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
-          if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
-          if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
-        }
-        
-        setIsGoogleConnected(true);
-      } catch (err) {
-        console.error("Failed to sync metrics from Google Fit:", err);
-      } finally {
-        setGoogleLoading(false);
-      }
+      localStorage.setItem('gfit_token', tokenResponse.access_token);
+      setIsGoogleConnected(true);
+      await syncGoogleFit(tokenResponse.access_token);
     },
     scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
     onError: error => console.error('Login Failed:', error)
   });
+
+  // "Sync Now" handler — uses stored token, falls back to re-login
+  const handleSyncNow = async () => {
+    const storedToken = localStorage.getItem('gfit_token');
+    if (storedToken) {
+      await syncGoogleFit(storedToken);
+    } else {
+      loginGoogleFit();
+    }
+  };
   
   const nextWorkout = db.workouts && db.workouts.length > 0 ? db.workouts[0] : null;
   const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
@@ -118,18 +139,20 @@ function Dashboard() {
         <h2 className="h3 flex justify-between items-center mb-2">
           Today's Readiness
           <div className="flex flex-col items-end gap-1">
-            {!isGoogleConnected ? (
-              <button 
-                className="badge text-xs px-2 py-1 cursor-pointer"
-                style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
-                onClick={() => loginGoogleFit()}
-                disabled={googleLoading}
-              >
-                {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
-              </button>
-            ) : (
-              <span className="badge badge-success text-[10px]">Fit Sync Active ✓</span>
-            )}
+            <button 
+              className="badge text-xs px-2 py-1 cursor-pointer"
+              style={{ 
+                background: isGoogleConnected ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)', 
+                color: isGoogleConnected ? 'var(--success)' : 'var(--text-primary)', 
+                border: `1px solid ${isGoogleConnected ? 'rgba(16, 185, 129, 0.3)' : 'var(--surface-border)'}` 
+              }}
+              onClick={handleSyncNow}
+              disabled={googleLoading}
+            >
+              {googleLoading ? 'Syncing...' : isGoogleConnected ? '↻ Sync Now' : 'Connect Google Fit'}
+            </button>
+            {syncStatus === 'success' && <span className="text-[10px] text-success">Synced ✓</span>}
+            {syncStatus === 'error' && <span className="text-[10px] text-warning">Token expired — tap to reconnect</span>}
           </div>
         </h2>
         {/* Google Fit Deprecation Warning */}
