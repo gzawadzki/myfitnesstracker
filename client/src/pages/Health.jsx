@@ -15,7 +15,7 @@ function getGoals(preferences) {
 }
 
 export default function Health() {
-  const { db, saveDailyHealthMetric, deleteDailyHealthMetric } = useData();
+  const { db, saveDailyHealthMetric, deleteDailyHealthMetric, loadingHealth } = useData();
   const { preferences: prefs, savePreferences: saveUserPreferences, loading: prefsLoading } = usePreferences();
   const toast = useToast();
   const [saving, setSaving] = useState(false);
@@ -115,6 +115,16 @@ export default function Health() {
     }
   };
 
+  if (prefsLoading || loadingHealth) {
+    return (
+      <div className="animate-fade-in">
+        <h1 className="h2 mb-4">Health</h1>
+        <div className="card glass animate-pulse mb-4" style={{ height: '150px' }}></div>
+        <div className="card glass animate-pulse" style={{ height: '220px' }}></div>
+      </div>
+    );
+  }
+
   const recentMetrics = (db.healthMetrics || []).slice(0, 14);
   const formatShortDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
@@ -188,18 +198,6 @@ export default function Health() {
     );
   };
 
-  if (prefsLoading) {
-    return (
-      <div className="animate-pulse p-4" style={{ paddingBottom: '80px' }}>
-        <div className="h-8 bg-black/20 rounded w-1/3 mb-2"></div>
-        <div className="h-4 bg-black/20 rounded w-1/2 mb-6"></div>
-        <div className="h-40 bg-black/20 rounded-xl mx-4 mb-6"></div>
-        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
-        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
-        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
-      </div>
-    );
-  }
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '80px' }}>

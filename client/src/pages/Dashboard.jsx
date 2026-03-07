@@ -9,7 +9,7 @@ import { fetchGoogleFitData } from '../lib/googleFit';
 import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
-  const { db, saveDailyHealthMetric } = useData();
+  const { db, saveDailyHealthMetric, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
   const toast = useToast();
   const [gfitToken, setGfitToken] = useState(null);
@@ -119,7 +119,7 @@ export default function Dashboard() {
       await saveDailyHealthMetric(todayStr, typeMap[editingField], editingField === 'steps' ? parseInt(editValue) : val);
       setSavedField(editingField);
       setTimeout(() => setSavedField(null), 1500);
-    } catch (err) {
+    } catch {
       toast.error('Failed to save');
     }
     setEditingField(null);
@@ -131,6 +131,22 @@ export default function Dashboard() {
   };
 
   if (prefsLoading) return <div className="p-4 text-center text-muted">Loading dashboard...</div>;
+
+  if (loadingCatalog || loadingSessions || loadingHealth) {
+    return (
+      <div className="animate-fade-in">
+        <div className="mb-6">
+          <div className="h1 mb-2">Overview</div>
+          <p className="text-secondary">Loading your dashboard…</p>
+        </div>
+        <div className="grid grid-cols-3 gap-3">
+          {[0, 1, 2].map((idx) => (
+            <div key={idx} className="card glass animate-pulse" style={{ height: '110px' }}></div>
+          ))}
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in">

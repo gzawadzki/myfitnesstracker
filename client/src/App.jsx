@@ -15,10 +15,10 @@ import Health from './pages/Health';
 import ProfilePage from './pages/Profile';
 
 function Layout({ session }) {
-  const { loading, error } = useData();
+  const { appReady, error } = useData();
   const toast = useToast();
 
-  if (loading) {
+  if (!appReady) {
     return (
       <div className="app-container flex items-center justify-center p-6 text-center">
         <div className="animate-fade-in">

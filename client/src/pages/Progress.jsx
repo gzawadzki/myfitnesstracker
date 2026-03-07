@@ -7,7 +7,7 @@ import { usePreferences } from '../hooks/usePreferences';
 import ExercisePicker from '../components/ExercisePicker';
 
 export default function Progress() {
-  const { db } = useData();
+  const { db, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs } = usePreferences();
   const navigate = useNavigate();
   const sleepGoal = prefs?.sleep_goal ?? 7.5;
@@ -79,6 +79,16 @@ export default function Progress() {
   let diffPercent = 0;
   if (tiredVol > 0 && wellRestedVol > 0) {
     diffPercent = Math.round(((wellRestedVol - tiredVol) / tiredVol) * 100);
+  }
+
+  if (loadingCatalog || loadingSessions || loadingHealth) {
+    return (
+      <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
+        <h1 className="h2 mb-4">Analytics</h1>
+        <div className="card glass animate-pulse mb-4" style={{ height: '80px' }}></div>
+        <div className="card glass animate-pulse" style={{ height: '300px' }}></div>
+      </div>
+    );
   }
 
   return (
