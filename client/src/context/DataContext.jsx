@@ -38,7 +38,7 @@ export function DataProvider({ children }) {
           .select('*')
           .eq('user_id', userId)
           .order('created_at', { ascending: false })
-          .limit(20);
+          .limit(100);
         if (sessErr) throw sessErr;
 
         const sessionIds = latestSessionsData.map(s => s.id);

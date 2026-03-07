@@ -3,10 +3,13 @@ import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
+import { usePreferences } from '../hooks/usePreferences';
 
 export default function Progress() {
   const { db } = useData();
+  const { preferences: prefs } = usePreferences();
   const navigate = useNavigate();
+  const sleepGoal = prefs?.sleep_goal ?? 7.5;
   const exerciseIds = Object.keys(db.exercises || {});
   const [selectedExUrlId, setSelectedExUrlId] = useState(null);
   const [xAxisMode, setXAxisMode] = useState('week');
@@ -60,7 +63,7 @@ export default function Progress() {
     const sleep = dayMetrics ? Number(dayMetrics.sleep_hours) : 0;
     
     const exSets = (sess.sets || []).filter(s => s.exercise_id === selectedExUrlId);
-    if (sleep >= 7.5) {
+    if (sleep >= sleepGoal) {
       wellRestedSets.push(...exSets);
     } else if (sleep > 0) {
       tiredSets.push(...exSets);
@@ -188,7 +191,7 @@ export default function Progress() {
               </span>
             </div>
             <p className="text-xs text-muted mt-2">
-              Your volume averages {diffPercent > 0 ? `a ${diffPercent}% increase` : `a ${Math.abs(diffPercent)}% decrease`} on days following &gt;7.5h sleep vs poorly rested days.
+              Your volume averages {diffPercent > 0 ? `a ${diffPercent}% increase` : `a ${Math.abs(diffPercent)}% decrease`} on days following &gt;{sleepGoal}h sleep vs poorly rested days.
             </p>
           </>
         ) : (
