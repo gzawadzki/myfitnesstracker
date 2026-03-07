@@ -1,0 +1,529 @@
+{
+  "phases": [
+    {
+      "id": "phase_1",
+      "name": "Faza 1 (Tydz. 1-4)"
+    },
+    {
+      "id": "phase_2",
+      "name": "Faza 2 (Tydz. 5-6)"
+    },
+    {
+      "id": "phase_3",
+      "name": "Faza 3 (Tydz. 7-10)"
+    }
+  ],
+  "workouts": [
+    {
+      "id": "w_1",
+      "phaseId": "phase_1",
+      "name": "Trening A – Pełne Ciało (Poniedziałek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_1",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        },
+        {
+          "exerciseId": "ex_2",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_3",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_4",
+          "targetSets": 2,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_5",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_6",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        }
+      ]
+    },
+    {
+      "id": "w_2",
+      "phaseId": "phase_1",
+      "name": "Trening B – Pełne Ciało (Środa)",
+      "exercises": [
+        {
+          "exerciseId": "ex_7",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_8",
+          "targetSets": 3,
+          "targetReps": "6-10"
+        },
+        {
+          "exerciseId": "ex_9",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_10",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_11",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        },
+        {
+          "exerciseId": "ex_12",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        }
+      ]
+    },
+    {
+      "id": "w_3",
+      "phaseId": "phase_1",
+      "name": "Trening C – Pełne Ciało (Piątek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_13",
+          "targetSets": 2,
+          "targetReps": "10-12/s"
+        },
+        {
+          "exerciseId": "ex_14",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_15",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_16",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_17",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_18",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_19",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        }
+      ]
+    },
+    {
+      "id": "w_4",
+      "phaseId": "phase_2",
+      "name": "Trening 1 – Góra A (Wtorek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_2",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        },
+        {
+          "exerciseId": "ex_8",
+          "targetSets": 3,
+          "targetReps": "6-8"
+        },
+        {
+          "exerciseId": "ex_9",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_3",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_5",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_17",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        }
+      ]
+    },
+    {
+      "id": "w_5",
+      "phaseId": "phase_2",
+      "name": "Trening 2 – Dół A (Środa)",
+      "exercises": [
+        {
+          "exerciseId": "ex_1",
+          "targetSets": 3,
+          "targetReps": "6-8"
+        },
+        {
+          "exerciseId": "ex_4",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_13",
+          "targetSets": 2,
+          "targetReps": "10-12/s"
+        },
+        {
+          "exerciseId": "ex_10",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_19",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_6",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        }
+      ]
+    },
+    {
+      "id": "w_6",
+      "phaseId": "phase_2",
+      "name": "Trening 3 – Góra B (Piątek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_14",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        },
+        {
+          "exerciseId": "ex_20",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        },
+        {
+          "exerciseId": "ex_21",
+          "targetSets": 3,
+          "targetReps": "8-12"
+        },
+        {
+          "exerciseId": "ex_15",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_11",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        },
+        {
+          "exerciseId": "ex_18",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_12",
+          "targetSets": 3,
+          "targetReps": "8-12"
+        }
+      ]
+    },
+    {
+      "id": "w_7",
+      "phaseId": "phase_2",
+      "name": "Trening 4 – Dół B (Sobota)",
+      "exercises": [
+        {
+          "exerciseId": "ex_22",
+          "targetSets": 1,
+          "targetReps": "3-5+\n2"
+        },
+        {
+          "exerciseId": "ex_16",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_10",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_23",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        },
+        {
+          "exerciseId": "ex_24",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        }
+      ]
+    },
+    {
+      "id": "w_8",
+      "phaseId": "phase_3",
+      "name": "Trening 1 – Góra 1 · Wycisk Poziomy & Biceps (Wtorek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_2",
+          "targetSets": 3,
+          "targetReps": "5-8"
+        },
+        {
+          "exerciseId": "ex_8",
+          "targetSets": 3,
+          "targetReps": "4-8"
+        },
+        {
+          "exerciseId": "ex_9",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_3",
+          "targetSets": 3,
+          "targetReps": "8-12"
+        },
+        {
+          "exerciseId": "ex_5",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_17",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        }
+      ]
+    },
+    {
+      "id": "w_9",
+      "phaseId": "phase_3",
+      "name": "Trening 2 – Dół 1 · Przysiad & Czworogłowe (Środa)",
+      "exercises": [
+        {
+          "exerciseId": "ex_1",
+          "targetSets": 3,
+          "targetReps": "5-8"
+        },
+        {
+          "exerciseId": "ex_4",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_13",
+          "targetSets": 2,
+          "targetReps": "10-12/s"
+        },
+        {
+          "exerciseId": "ex_10",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_19",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_6",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        }
+      ]
+    },
+    {
+      "id": "w_10",
+      "phaseId": "phase_3",
+      "name": "Trening 3 – Góra 2 · Wycisk Pionowy & Biceps (Piątek)",
+      "exercises": [
+        {
+          "exerciseId": "ex_14",
+          "targetSets": 3,
+          "targetReps": "6-10"
+        },
+        {
+          "exerciseId": "ex_20",
+          "targetSets": 3,
+          "targetReps": "8-10"
+        },
+        {
+          "exerciseId": "ex_21",
+          "targetSets": 3,
+          "targetReps": "8-15"
+        },
+        {
+          "exerciseId": "ex_15",
+          "targetSets": 3,
+          "targetReps": "10-12"
+        },
+        {
+          "exerciseId": "ex_11",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        },
+        {
+          "exerciseId": "ex_18",
+          "targetSets": 3,
+          "targetReps": "8-12"
+        },
+        {
+          "exerciseId": "ex_12",
+          "targetSets": 3,
+          "targetReps": "8-12"
+        }
+      ]
+    },
+    {
+      "id": "w_11",
+      "phaseId": "phase_3",
+      "name": "Trening 4 – Dół 2 · Martwy & Pośladki/Dwugłowe (Sobota)",
+      "exercises": [
+        {
+          "exerciseId": "ex_22",
+          "targetSets": 1,
+          "targetReps": "3-5+\n2"
+        },
+        {
+          "exerciseId": "ex_16",
+          "targetSets": 3,
+          "targetReps": "12-15"
+        },
+        {
+          "exerciseId": "ex_10",
+          "targetSets": 3,
+          "targetReps": "10-15"
+        },
+        {
+          "exerciseId": "ex_23",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        },
+        {
+          "exerciseId": "ex_24",
+          "targetSets": 3,
+          "targetReps": "15-20"
+        }
+      ]
+    }
+  ],
+  "exercises": {
+    "ex_1": {
+      "id": "ex_1",
+      "name": "Barbell Back Squat"
+    },
+    "ex_2": {
+      "id": "ex_2",
+      "name": "Incline Dumbbell Press"
+    },
+    "ex_3": {
+      "id": "ex_3",
+      "name": "Chest-Supported DB Row"
+    },
+    "ex_4": {
+      "id": "ex_4",
+      "name": "Leg Press"
+    },
+    "ex_5": {
+      "id": "ex_5",
+      "name": "Seated DB Lateral Raise"
+    },
+    "ex_6": {
+      "id": "ex_6",
+      "name": "Hanging Knee Raises"
+    },
+    "ex_7": {
+      "id": "ex_7",
+      "name": "Romanian Deadlift"
+    },
+    "ex_8": {
+      "id": "ex_8",
+      "name": "Weighted Chin-Ups"
+    },
+    "ex_9": {
+      "id": "ex_9",
+      "name": "Flat Machine Chest Press"
+    },
+    "ex_10": {
+      "id": "ex_10",
+      "name": "Lying Leg Curls"
+    },
+    "ex_11": {
+      "id": "ex_11",
+      "name": "Face Pulls"
+    },
+    "ex_12": {
+      "id": "ex_12",
+      "name": "Ab Wheel Rollouts"
+    },
+    "ex_13": {
+      "id": "ex_13",
+      "name": "Bulgarian Split Squats"
+    },
+    "ex_14": {
+      "id": "ex_14",
+      "name": "Seated DB Shoulder Press"
+    },
+    "ex_15": {
+      "id": "ex_15",
+      "name": "Single-Arm DB Row"
+    },
+    "ex_16": {
+      "id": "ex_16",
+      "name": "Glute-Focused Hyperext."
+    },
+    "ex_17": {
+      "id": "ex_17",
+      "name": "Cable OH Triceps Ext"
+    },
+    "ex_18": {
+      "id": "ex_18",
+      "name": "Seated Incline DB Curl"
+    },
+    "ex_19": {
+      "id": "ex_19",
+      "name": "Standing Calf Raises"
+    },
+    "ex_20": {
+      "id": "ex_20",
+      "name": "Hammer Strength Row"
+    },
+    "ex_21": {
+      "id": "ex_21",
+      "name": "Dips (Chest-Focused)"
+    },
+    "ex_22": {
+      "id": "ex_22",
+      "name": "Conventional Deadlift"
+    },
+    "ex_23": {
+      "id": "ex_23",
+      "name": "Leg Extensions"
+    },
+    "ex_24": {
+      "id": "ex_24",
+      "name": "Seated Calf Raises"
+    }
+  },
+  "logs": []
+}
