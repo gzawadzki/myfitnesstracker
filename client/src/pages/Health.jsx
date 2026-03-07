@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { useToast } from '../components/Toast';
-import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, CheckCircle } from 'lucide-react';
+import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, CheckCircle, Heart, Flame } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function getGoals(preferences) {
@@ -36,6 +36,10 @@ export default function Health() {
   const [sleepInput, setSleepInput] = useState(todayMetrics.sleep_hours || "");
   const [stepsInput, setStepsInput] = useState(todayMetrics.steps || "");
   const [weightInput, setWeightInput] = useState(todayMetrics.weight || "");
+  const [heartRateInput, setHeartRateInput] = useState(todayMetrics.heart_rate || "");
+  const [caloriesInput, setCaloriesInput] = useState(todayMetrics.calories_burned || "");
+  const [showMoreHR, setShowMoreHR] = useState(false);
+  const [showMoreCal, setShowMoreCal] = useState(false);
 
   // Goal Settings State
   const goals = getGoals(prefs);
@@ -84,6 +88,18 @@ export default function Health() {
           setError('Weight must be between 20 and 500.');
           return;
         }
+      } else if (type === 'heart_rate') {
+        val = parseInt(heartRateInput);
+        if (isNaN(val) || val < 30 || val > 250) {
+          setError('Heart rate must be between 30 and 250 BPM.');
+          return;
+        }
+      } else if (type === 'calories_burned') {
+        val = parseInt(caloriesInput);
+        if (isNaN(val) || val <= 0) {
+          setError('Calories must be a positive number.');
+          return;
+        }
       }
 
       await saveDailyHealthMetric(todayStr, type, val);
@@ -105,6 +121,8 @@ export default function Health() {
     if (sleepInput) toSave.push('sleep_hours');
     if (stepsInput) toSave.push('steps');
     if (weightInput) toSave.push('weight');
+    if (heartRateInput) toSave.push('heart_rate');
+    if (caloriesInput) toSave.push('calories_burned');
     for (const type of toSave) {
       await handleSave(type);
     }
@@ -131,7 +149,7 @@ export default function Health() {
   };
 
   const handleDelete = async (dateStr, type) => {
-    const typeLabel = type === 'sleep_hours' ? 'sleep' : type === 'steps' ? 'step' : 'weight';
+    const typeLabel = type === 'sleep_hours' ? 'sleep' : type === 'steps' ? 'step' : type === 'heart_rate' ? 'heart rate' : type === 'calories_burned' ? 'calories' : 'weight';
     if (!window.confirm(`Delete ${typeLabel} record for ${formatShortDate(dateStr)}?`)) return;
     try {
       setDeletingId(`${dateStr}-${type}`);
@@ -175,6 +193,11 @@ export default function Health() {
   const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', goals.sleep);
   const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.steps);
 
+  const hrAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'heart_rate'));
+  const hrAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'heart_rate'));
+  const calAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'calories_burned'));
+  const calAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'calories_burned'));
+
   // Weight Sparkline Data (Last 30 days)
   const thirtyDaysAgo = new Date();
   thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -202,7 +225,7 @@ export default function Health() {
     <div className="animate-fade-in" style={{ paddingBottom: '80px' }}>
       <header className="mb-6 p-4 pb-0">
         <h1 className="h1 mb-1">Health Metrics</h1>
-        <p className="text-secondary">Track your daily sleep and step counts.</p>
+        <p className="text-secondary">Track your daily health and fitness metrics.</p>
       </header>
 
       {error && (
@@ -272,6 +295,20 @@ export default function Health() {
             <div className="text-sm">7d Avg: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</strong></div>
             <div className="text-sm">30d Avg: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${goals.weightUnit}` : '--'}</strong></div>
             <div className="text-sm mt-1">🎯 <strong className="text-white">{goals.weight || '--'}</strong> {goals.weightUnit}</div>
+          </div>
+        </div>
+        {/* HR + Calories Insights */}
+        <div className="flex gap-4 mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
+          <div className="flex-1">
+            <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Heart Rate</div>
+            <div className="text-sm">7d Avg: <strong className="text-white">{hrAvg7 > 0 ? `${hrAvg7} bpm` : '--'}</strong></div>
+            <div className="text-sm">30d Avg: <strong className="text-white">{hrAvg30 > 0 ? `${hrAvg30} bpm` : '--'}</strong></div>
+          </div>
+          <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
+          <div className="flex-1">
+            <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Calories</div>
+            <div className="text-sm">7d Avg: <strong className="text-white">{calAvg7 > 0 ? calAvg7.toLocaleString() : '--'}</strong></div>
+            <div className="text-sm">30d Avg: <strong className="text-white">{calAvg30 > 0 ? calAvg30.toLocaleString() : '--'}</strong></div>
           </div>
         </div>
       </div>
@@ -528,8 +565,133 @@ export default function Health() {
         </div>
       </div>
 
+      {/* Heart Rate Card */}
+      <div className="card glass mx-4 mb-4">
+        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
+          <Heart className="text-accent-primary" /> Heart Rate
+        </div>
+
+        <div className="mb-4">
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Resting HR (BPM) {savedFields.heart_rate && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              className="input flex-1"
+              placeholder="e.g. 65"
+              value={heartRateInput}
+              onChange={(e) => setHeartRateInput(e.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => handleSave('heart_rate')}
+              disabled={saving || !heartRateInput}
+            >
+              {saving ? '...' : <Save size={20} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
+          <h4 className="text-sm font-bold mb-3">Recent History</h4>
+          {recentMetrics.filter(m => m.heart_rate).length === 0 ? (
+            <p className="text-xs text-muted">No heart rate data recorded yet.</p>
+          ) : (
+            <div className="flex-col gap-2 relative">
+              {recentMetrics.filter(m => m.heart_rate).slice(0, showMoreHR ? 10 : 5).map((m, idx) => (
+                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
+                  <span className="text-secondary">{formatShortDate(m.date)}</span>
+                  <span className="font-bold flex items-center gap-2">
+                    {m.heart_rate} bpm
+                    <span className="badge text-[10px]" style={m.heart_rate < 70 ? { background: 'var(--success)', color: 'white' } : m.heart_rate < 85 ? { background: 'var(--warning)', color: 'white' } : { background: 'var(--danger)', color: 'white' }}>
+                      {m.heart_rate < 70 ? 'Resting' : m.heart_rate < 85 ? 'Normal' : 'Elevated'}
+                    </span>
+                    <button
+                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
+                      onClick={() => handleDelete(m.date, 'heart_rate')}
+                      disabled={deletingId === `${m.date}-heart_rate`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {recentMetrics.filter(m => m.heart_rate).length > 5 && (
+            <button
+              className="text-xs text-accent-primary mt-2 hover:underline"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setShowMoreHR(!showMoreHR)}
+            >
+              {showMoreHR ? 'Show less' : `Show more (${recentMetrics.filter(m => m.heart_rate).length} total)`}
+            </button>
+          )}
+        </div>
+      </div>
+
+      {/* Calories Card */}
+      <div className="card glass mx-4 mb-4">
+        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
+          <Flame className="text-accent-primary" /> Calories Burned
+        </div>
+
+        <div className="mb-4">
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Calories {savedFields.calories_burned && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
+          <div className="flex gap-2">
+            <input
+              type="number"
+              className="input flex-1"
+              placeholder="e.g. 2200"
+              value={caloriesInput}
+              onChange={(e) => setCaloriesInput(e.target.value)}
+            />
+            <button
+              className="btn btn-primary"
+              onClick={() => handleSave('calories_burned')}
+              disabled={saving || !caloriesInput}
+            >
+              {saving ? '...' : <Save size={20} />}
+            </button>
+          </div>
+        </div>
+
+        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
+          <h4 className="text-sm font-bold mb-3">Recent History</h4>
+          {recentMetrics.filter(m => m.calories_burned).length === 0 ? (
+            <p className="text-xs text-muted">No calorie data recorded yet.</p>
+          ) : (
+            <div className="flex-col gap-2 relative">
+              {recentMetrics.filter(m => m.calories_burned).slice(0, showMoreCal ? 10 : 5).map((m, idx) => (
+                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
+                  <span className="text-secondary">{formatShortDate(m.date)}</span>
+                  <span className="font-bold flex items-center gap-2">
+                    {m.calories_burned.toLocaleString()} kcal
+                    <button
+                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
+                      onClick={() => handleDelete(m.date, 'calories_burned')}
+                      disabled={deletingId === `${m.date}-calories_burned`}
+                    >
+                      <Trash2 size={14} />
+                    </button>
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+          {recentMetrics.filter(m => m.calories_burned).length > 5 && (
+            <button
+              className="text-xs text-accent-primary mt-2 hover:underline"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setShowMoreCal(!showMoreCal)}
+            >
+              {showMoreCal ? 'Show less' : `Show more (${recentMetrics.filter(m => m.calories_burned).length} total)`}
+            </button>
+          )}
+        </div>
+      </div>
+
       {/* Save All Button */}
-      {(sleepInput || stepsInput || weightInput) && (
+      {(sleepInput || stepsInput || weightInput || heartRateInput || caloriesInput) && (
         <div className="mx-4 mb-6">
           <button className="btn btn-primary btn-block text-sm" onClick={handleSaveAll} disabled={saving}>
             <Save size={16} /> {saving ? 'Saving...' : 'Save All Metrics'}

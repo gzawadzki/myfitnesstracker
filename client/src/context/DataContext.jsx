@@ -202,6 +202,8 @@ export function DataProvider({ children }) {
       steps: existing?.steps ?? null,
       weight: existing?.weight ?? null,
       weight_unit: existing?.weight_unit ?? null,
+      heart_rate: existing?.heart_rate ?? null,
+      calories_burned: existing?.calories_burned ?? null,
     };
     mergedPayload[type] = value;
 

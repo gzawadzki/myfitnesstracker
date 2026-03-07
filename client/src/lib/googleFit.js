@@ -25,7 +25,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = toDateStr(d.getTime());
-    dayMap[key] = { date: key, steps: 0, sleepHours: 0, weightKg: null };
+    dayMap[key] = { date: key, steps: 0, sleepHours: 0, weightKg: null, heartRate: null, caloriesBurned: 0 };
   }
 
   // ─── 1. STEPS ───────────────────────────────────────────
@@ -177,7 +177,60 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     console.warn('Google Fit weight summary fallback (non-fatal):', e);
   }
 
+  // ─── 4. HEART RATE ─────────────────────────────────────
+  try {
+    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aggregateBy: [{ dataTypeName: 'com.google.heart_rate.bpm' }],
+        bucketByTime: { durationMillis: 86400000 },
+        startTimeMillis,
+        endTimeMillis
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const bucket of (data.bucket || [])) {
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        if (points.length > 0 && dayMap[dateKey]) {
+          // Take average of all readings for the day
+          const sum = points.reduce((s, p) => s + (p.value?.[0]?.fpVal || 0), 0);
+          dayMap[dateKey].heartRate = Math.round(sum / points.length);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit heart rate error (non-fatal):', e);
+  }
+
+  // ─── 5. CALORIES ───────────────────────────────────────
+  try {
+    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
+        bucketByTime: { durationMillis: 86400000 },
+        startTimeMillis,
+        endTimeMillis
+      })
+    });
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const bucket of (data.bucket || [])) {
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
+        if (dayMap[dateKey]) dayMap[dateKey].caloriesBurned = Math.round(total);
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit calories error (non-fatal):', e);
+  }
+
   const results = Object.values(dayMap);
-  console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg));
+  console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0));
   return results;
 }

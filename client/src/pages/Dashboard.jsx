@@ -30,6 +30,8 @@ export default function Dashboard() {
   const sleep = todayMetrics.sleep_hours || 0;
   const steps = todayMetrics.steps || 0;
   const weight = todayMetrics.weight || 0;
+  const heartRate = todayMetrics.heart_rate || 0;
+  const calories = todayMetrics.calories_burned || 0;
 
   const sortedMetrics = (db.healthMetrics || []).filter(m => m.weight > 0).sort((a, b) => new Date(b.date) - new Date(a.date));
   const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
@@ -52,6 +54,8 @@ export default function Dashboard() {
         if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
         if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
         if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
+        if (day.heartRate) await saveDailyHealthMetric(day.date, 'heart_rate', day.heartRate);
+        if (day.caloriesBurned > 0) await saveDailyHealthMetric(day.date, 'calories_burned', day.caloriesBurned);
       }
       setSyncStatus('success');
       toast.success('Google Fit synced');
@@ -110,7 +114,7 @@ export default function Dashboard() {
     const val = parseFloat(editValue);
     if (isNaN(val) || val <= 0) { setEditingField(null); return; }
     
-    const typeMap = { sleep: 'sleep_hours', steps: 'steps', weight: 'weight' };
+    const typeMap = { sleep: 'sleep_hours', steps: 'steps', weight: 'weight', heartRate: 'heart_rate', calories: 'calories_burned' };
     try {
       await saveDailyHealthMetric(todayStr, typeMap[editingField], editingField === 'steps' ? parseInt(editValue) : val);
       setSavedField(editingField);
@@ -258,6 +262,67 @@ export default function Dashboard() {
                 {weight > 0 ? 'Logged' : 'Not logged'}
               </span>
             )}
+          </div>
+        </div>
+
+        {/* HR + Calories row */}
+        <div className="flex justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--surface-border)' }}>
+          {/* Heart Rate */}
+          <div className="flex-col items-center flex-1 text-center" onClick={() => editingField !== 'heartRate' && startEdit('heartRate', heartRate)} style={{ cursor: 'pointer' }}>
+            <span className="text-muted text-sm">Heart Rate {savedField === 'heartRate' ? <span style={{ color: 'var(--success)' }}>✓</span> : '✎'}</span>
+            {editingField === 'heartRate' ? (
+              <input
+                type="number"
+                className="mt-1 mb-1"
+                style={{ width: '80px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 600, padding: '4px', background: 'var(--surface-color)', border: '1px solid var(--accent-primary)', borderRadius: '8px' }}
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onBlur={saveEdit}
+                onKeyDown={handleEditKeyDown}
+                placeholder="70"
+                autoFocus
+              />
+            ) : (
+              <div className="h2 mt-1 mb-1" style={{ color: heartRate > 0 ? (heartRate < 70 ? 'var(--success)' : heartRate < 85 ? 'var(--warning)' : 'var(--danger)') : 'var(--text-muted)' }}>
+                {heartRate > 0 ? `${heartRate}` : '—'}
+              </div>
+            )}
+            <span className="badge" style={
+              heartRate === 0 ? { backgroundColor: 'var(--surface-color)', color: 'var(--text-muted)' } :
+              heartRate < 70 ? { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' } :
+              heartRate < 85 ? { backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' } :
+              { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)' }
+            }>
+              {heartRate === 0 ? 'Not logged' : heartRate < 70 ? 'Resting' : heartRate < 85 ? 'Normal' : 'Elevated'}
+            </span>
+          </div>
+          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+          {/* Calories */}
+          <div className="flex-col items-center flex-1 text-center" onClick={() => editingField !== 'calories' && startEdit('calories', calories)} style={{ cursor: 'pointer' }}>
+            <span className="text-muted text-sm">Calories {savedField === 'calories' ? <span style={{ color: 'var(--success)' }}>✓</span> : '✎'}</span>
+            {editingField === 'calories' ? (
+              <input
+                type="number"
+                className="mt-1 mb-1"
+                style={{ width: '80px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 600, padding: '4px', background: 'var(--surface-color)', border: '1px solid var(--accent-primary)', borderRadius: '8px' }}
+                value={editValue}
+                onChange={e => setEditValue(e.target.value)}
+                onBlur={saveEdit}
+                onKeyDown={handleEditKeyDown}
+                placeholder="2000"
+                autoFocus
+              />
+            ) : (
+              <div className="h2 mt-1 mb-1" style={{ color: calories > 0 ? 'var(--accent-primary)' : 'var(--text-muted)' }}>
+                {calories > 0 ? calories.toLocaleString() : '—'}
+              </div>
+            )}
+            <span className="badge" style={
+              calories === 0 ? { backgroundColor: 'var(--surface-color)', color: 'var(--text-muted)' } :
+              { backgroundColor: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)' }
+            }>
+              {calories === 0 ? 'Not logged' : 'kcal burned'}
+            </span>
           </div>
         </div>
       </div>
