@@ -86,8 +86,9 @@ export default function Progress() {
     };
   };
 
-  const chartData = buildChartData(selectedExUrlId);
-  const selectedEx = db.exercises[selectedExUrlId];
+  const { chartRows, totalHistoryCount, filteredHistoryCount } = buildChartData(resolvedExerciseId, selectedRange);
+  const isTruncated = totalHistoryCount > filteredHistoryCount;
+  const selectedEx = db.exercises[resolvedExerciseId];
   const exerciseOptions = Object.values(db.exercises || {}).sort((a, b) => a.name.localeCompare(b.name));
 
   // 1. Calculate Real Metric Cards Data
@@ -223,14 +224,14 @@ export default function Progress() {
 
       {isTruncated && (
         <p className="text-xs text-muted mb-3">
-          Showing last {truncatedSessionsLabel} sessions from your selected range.
+          Showing {filteredHistoryCount} of {totalHistoryCount} data points for selected range.
         </p>
       )}
 
       <div className="card glass mb-6" style={{ height: '300px', padding: 'var(--space-4) var(--space-2)' }}>
-        {chartData.length > 0 ? (
+        {chartRows.length > 0 ? (
           <ResponsiveContainer width="100%" height="100%">
-            <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
+            <LineChart data={chartRows} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
               <XAxis dataKey={xAxisMode} stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
