@@ -70,10 +70,15 @@ function Dashboard() {
     onSuccess: async (tokenResponse) => {
       try {
         setGoogleLoading(true);
-        const { steps: fitSteps, sleepHours: fitSleep, weightKg: fitWeight } = await fetchGoogleFitData(tokenResponse.access_token);
-        if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
-        if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
-        if (fitWeight > 0) await saveDailyHealthMetric(todayStr, 'weight', fitWeight);
+        // fetchGoogleFitData now returns an array of { date, steps, sleepHours, weightKg }
+        const dailyResults = await fetchGoogleFitData(tokenResponse.access_token, 7);
+        
+        for (const day of dailyResults) {
+          if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
+          if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
+          if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
+        }
+        
         setIsGoogleConnected(true);
       } catch (err) {
         console.error("Failed to sync metrics from Google Fit:", err);
