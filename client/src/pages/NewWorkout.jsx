@@ -1,6 +1,6 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { useState, useEffect, useMemo, useRef } from 'react';
 import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X, Clock, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
@@ -15,9 +15,9 @@ export default function NewWorkout() {
   const [setsData, setSetsData] = useState(() => {
     try { return JSON.parse(sessionStorage.getItem('workoutSetsData')) || {}; } catch { return {}; }
   });
-  const [exerciseComments, setExerciseComments] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('workoutComments')) || {}; } catch { return {}; }
-  });
+  const [workoutComment, setWorkoutComment] = useState(
+    () => sessionStorage.getItem('workoutComment') || ''
+  );
   const workoutStartTime = useRef(() => {
     const stored = sessionStorage.getItem('workoutStartTime');
     if (stored) return parseInt(stored);
@@ -77,15 +77,15 @@ export default function NewWorkout() {
     sessionStorage.setItem('workoutSetsData', JSON.stringify(setsData));
   }, [setsData]);
   useEffect(() => {
-    sessionStorage.setItem('workoutComments', JSON.stringify(exerciseComments));
-  }, [exerciseComments]);
+    sessionStorage.setItem('workoutComment', workoutComment);
+  }, [workoutComment]);
 
   // Clear sessionStorage when leaving the workout page
   useEffect(() => {
     return () => {
       sessionStorage.removeItem('workoutStartTime');
       sessionStorage.removeItem('workoutSetsData');
-      sessionStorage.removeItem('workoutComments');
+      sessionStorage.removeItem('workoutComment');
     };
   }, []);
 
@@ -262,13 +262,8 @@ export default function NewWorkout() {
     }
   };
   
-  const updateComment = useCallback((exId, value) => {
-    setExerciseComments(prev => ({ ...prev, [exId]: value }));
-  }, []);
-
   const finishWorkout = async () => {
     try {
-      // Build setsData that excludes skipped exercises
       const finalSetsData = {};
       for (const ex of exercises) {
         if (ex.isSkipped) continue;
@@ -277,17 +272,10 @@ export default function NewWorkout() {
           finalSetsData[ex.id] = sets;
         }
       }
-      // Combine per-exercise comments into session notes
-      const commentParts = exercises
-        .filter(ex => !ex.isSkipped && exerciseComments[ex.id]?.trim())
-        .map(ex => `${ex.name}: ${exerciseComments[ex.id].trim()}`);
-      const combinedNotes = commentParts.join('\n');
-
-      await saveWorkoutSession(currentWorkout.id, finalSetsData, combinedNotes, null, null, Math.round(elapsedSeconds / 60));
-      // Clear persisted workout state
+      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null, Math.round(elapsedSeconds / 60));
       sessionStorage.removeItem('workoutStartTime');
       sessionStorage.removeItem('workoutSetsData');
-      sessionStorage.removeItem('workoutComments');
+      sessionStorage.removeItem('workoutComment');
       toast.success('Workout saved!');
       navigate('/');
     } catch (err) {
@@ -474,15 +462,15 @@ export default function NewWorkout() {
             })}
           </div>
 
-          {/* Per-exercise comment */}
+          {/* Workout comment */}
           <div className="mt-4 flex items-start gap-2" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-md)', padding: '8px 10px' }}>
             <MessageSquare size={14} className="text-muted mt-1 flex-shrink-0" />
             <textarea
               className="w-full text-sm"
               style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', minHeight: '28px', maxHeight: '80px', padding: 0, lineHeight: 1.4 }}
-              placeholder="Notes for this exercise..."
-              value={exerciseComments[exercise.id] || ''}
-              onChange={e => updateComment(exercise.id, e.target.value)}
+              placeholder="Workout notes..."
+              value={workoutComment}
+              onChange={e => setWorkoutComment(e.target.value)}
               rows={1}
               onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
             />
