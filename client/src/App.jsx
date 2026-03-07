@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
 import { usePreferences } from './hooks/usePreferences';
 import NewWorkout from './pages/NewWorkout';
@@ -678,9 +678,9 @@ function App() {
   }
 
   return (
-    <BrowserRouter>
+    <HashRouter>
       <Layout session={session} />
-    </BrowserRouter>
+    </HashRouter>
   );
 }
 
