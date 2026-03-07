@@ -183,8 +183,54 @@ export function DataProvider({ children }) {
     return data;
   };
 
+  const deleteWorkoutSession = async (sessionId) => {
+    // Due to cascading deletes or manual deletion, we might just need to delete the session.
+    // The sets should have a foreign key on delete cascade, or we manually delete them.
+    // Assuming cascading for now or just deleting session. If sets linger, it's safer to delete them first:
+    const { error: setsErr } = await supabase.from('logged_sets').delete().eq('session_id', sessionId);
+    if (setsErr) throw setsErr;
+
+    const { error: sessErr } = await supabase.from('workout_sessions').delete().eq('id', sessionId);
+    if (sessErr) throw sessErr;
+
+    // Update local context
+    setDb(prev => ({
+      ...prev,
+      sessions: (prev.sessions || []).filter(s => s.id !== sessionId)
+    }));
+    return true;
+  };
+
+  const deleteDailyHealthMetric = async (dateStr, type) => {
+    // We update the specific column to null or 0.
+    const updatePayload = { date: dateStr };
+    updatePayload[type] = null; // or 0, but null removes it
+
+    const { data, error } = await supabase
+      .from('health_metrics')
+      .update(updatePayload)
+      .eq('date', dateStr)
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update local context
+    setDb(prev => {
+      const existingIdx = prev.healthMetrics.findIndex(h => h.date === dateStr);
+      if (existingIdx >= 0) {
+        const newHealth = [...prev.healthMetrics];
+        newHealth[existingIdx] = { ...newHealth[existingIdx], ...data };
+        return { ...prev, healthMetrics: newHealth };
+      }
+      return prev;
+    });
+
+    return data;
+  };
+
   return (
-    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric }}>
+    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric }}>
       {children}
     </DataContext.Provider>
   );

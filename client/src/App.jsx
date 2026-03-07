@@ -9,6 +9,7 @@ import { useGoogleLogin } from '@react-oauth/google';
 import { fetchGoogleFitData } from './lib/googleFit';
 import { supabase } from './lib/supabase';
 import Login from './pages/Login';
+import { Trash2 } from 'lucide-react'; // Added Trash2
 
 // ... BottomNav code ...
 
@@ -166,8 +167,9 @@ function Dashboard() {
 }
 
 function WorkoutLog() {
-  const { db } = useData();
+  const { db, deleteWorkoutSession } = useData();
   const [expandedSessionId, setExpandedSessionId] = useState(null);
+  const [deletingId, setDeletingId] = useState(null);
 
   // Sort and display the latest sessions we fetched from Context
   // We need to map the session template_id back to actual workout names
@@ -222,7 +224,25 @@ function WorkoutLog() {
                   </div>
                   <div className="flex items-center gap-2">
                     {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
-                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)' }}>▼</span>
+                    <button 
+                      className="p-1 text-muted hover:text-warning transition-colors"
+                      onClick={async (e) => {
+                        e.stopPropagation();
+                        if(window.confirm("Are you sure you want to delete this workout?")) {
+                          try {
+                            setDeletingId(session.id);
+                            await deleteWorkoutSession(session.id);
+                          } catch (err) {
+                            alert("Failed to delete: " + err.message);
+                            setDeletingId(null);
+                          }
+                        }
+                      }}
+                      disabled={deletingId === session.id}
+                    >
+                      <Trash2 size={16} />
+                    </button>
+                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)', marginLeft: '4px' }}>▼</span>
                   </div>
                 </div>
                 
@@ -348,7 +368,7 @@ function WorkoutSelect() {
   );
 }
 
-function Layout() {
+function Layout({ session }) {
   const { loading, error } = useData();
 
   if (loading) {
@@ -441,6 +461,11 @@ function Layout() {
               <h1 className="h1 mb-1">Profile</h1>
               <p className="text-secondary mb-6">Manage your account and connections.</p>
               
+              <div className="card glass mb-6 p-4">
+                <span className="text-xs text-muted block mb-1">Logged in as</span>
+                <span className="font-medium">{session?.user?.email || "Unknown User"}</span>
+              </div>
+              
               <button 
                 className="btn w-full mb-4" 
                 style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} 
@@ -494,7 +519,7 @@ function App() {
 
   return (
     <BrowserRouter>
-      <Layout />
+      <Layout session={session} />
     </BrowserRouter>
   );
 }
