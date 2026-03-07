@@ -1,41 +1,94 @@
 import React, { useState, useEffect } from 'react';
 import { ChevronLeft } from 'lucide-react';
-import { useNavigate } from 'react-router-dom';
+import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
+
+const RANGE_OPTIONS = [
+  { key: '30d', label: '30D', days: 30 },
+  { key: '90d', label: '90D', days: 90 },
+  { key: 'all', label: 'All', days: null }
+];
 
 export default function Progress() {
   const { db } = useData();
   const { preferences: prefs } = usePreferences();
   const navigate = useNavigate();
+  const [searchParams, setSearchParams] = useSearchParams();
   const sleepGoal = prefs?.sleep_goal ?? 7.5;
   const exerciseIds = Object.keys(db.exercises || {});
-  const [selectedExUrlId, setSelectedExUrlId] = useState(null);
+  const initialExerciseId = searchParams.get('exerciseId');
+  const initialRange = searchParams.get('range');
+  const [selectedExUrlId, setSelectedExUrlId] = useState(initialExerciseId);
   const [xAxisMode, setXAxisMode] = useState('week');
+  const [selectedRange, setSelectedRange] = useState(
+    RANGE_OPTIONS.some(option => option.key === initialRange) ? initialRange : '30d'
+  );
+
+  const resolvedExerciseId = (selectedExUrlId && db.exercises?.[selectedExUrlId])
+    ? selectedExUrlId
+    : (exerciseIds[0] || null);
 
   useEffect(() => {
-    if (!selectedExUrlId && exerciseIds.length > 0) {
-      setSelectedExUrlId(exerciseIds[0]);
+    if (!resolvedExerciseId) return;
+
+    const nextParams = new URLSearchParams(searchParams);
+    nextParams.set('exerciseId', resolvedExerciseId);
+    nextParams.set('range', selectedRange);
+
+    if (searchParams.toString() !== nextParams.toString()) {
+      setSearchParams(nextParams, { replace: true });
     }
-  }, [exerciseIds.length]);
+  }, [resolvedExerciseId, selectedRange, searchParams, setSearchParams]);
   
   // We extract actual history data from the global db context to build the chart
-  const buildChartData = (exerciseId) => {
+  const buildChartData = (exerciseId, rangeKey) => {
     const ex = db.exercises[exerciseId];
-    if (!ex || !ex.history) return [];
+    if (!ex || !ex.history) {
+      return { chartRows: [], totalHistoryCount: 0, filteredHistoryCount: 0 };
+    }
 
-    return ex.history.map((h, i) => ({
+    const rangeOption = RANGE_OPTIONS.find(option => option.key === rangeKey) || RANGE_OPTIONS[0];
+    const now = new Date();
+    const cutoffDate = rangeOption.days !== null
+      ? new Date(now.getFullYear(), now.getMonth(), now.getDate() - rangeOption.days)
+      : null;
+
+    const historyWithMeta = ex.history
+      .map((h, i) => {
+        const parsedDate = h.date ? new Date(h.date) : null;
+        return {
+          h,
+          i,
+          parsedDate,
+          hasValidDate: !!parsedDate && !Number.isNaN(parsedDate.getTime())
+        };
+      })
+      .filter(({ parsedDate, hasValidDate }) => {
+        if (!cutoffDate) return true;
+        return hasValidDate && parsedDate >= cutoffDate;
+      });
+
+    const chartRows = historyWithMeta.map(({ h, i }) => ({
       week: `Wk ${i + 1}`,
       date: h.date ? new Date(h.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `Wk ${i + 1}`,
       weight: h.weight,
       volume: h.weight * h.reps,
       reps: h.reps
     }));
+
+    return {
+      chartRows,
+      totalHistoryCount: ex.history.length,
+      filteredHistoryCount: historyWithMeta.length
+    };
   };
 
-  const chartData = buildChartData(selectedExUrlId);
-  const selectedEx = db.exercises[selectedExUrlId];
+  const { chartRows: chartData, totalHistoryCount, filteredHistoryCount } = buildChartData(resolvedExerciseId, selectedRange);
+  const selectedEx = db.exercises[resolvedExerciseId];
+  const isTruncated = selectedRange !== 'all' && filteredHistoryCount < totalHistoryCount;
+  const selectedRangeLabel = RANGE_OPTIONS.find(option => option.key === selectedRange)?.label || '30D';
 
   // 1. Calculate Real Metric Cards Data
   const totalWorkouts = db.sessions ? db.sessions.length : 0;
@@ -110,7 +163,7 @@ export default function Progress() {
       <div className="mb-4 flex items-center justify-between gap-2">
         <select 
           className="text-sm font-medium flex-1" 
-          value={selectedExUrlId}
+          value={resolvedExerciseId || ''}
           onChange={e => setSelectedExUrlId(e.target.value)}
         >
           {Object.values(db.exercises).map(ex => (
@@ -142,7 +195,30 @@ export default function Progress() {
             Date
           </button>
         </div>
+
+        <div className="flex rounded-md p-1" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
+          {RANGE_OPTIONS.map(option => (
+            <button
+              key={option.key}
+              className="text-xs font-medium rounded-sm"
+              style={{
+                padding: '4px 10px',
+                background: selectedRange === option.key ? 'var(--accent-primary)' : 'transparent',
+                color: selectedRange === option.key ? '#fff' : 'var(--text-muted)'
+              }}
+              onClick={() => setSelectedRange(option.key)}
+            >
+              {option.label}
+            </button>
+          ))}
+        </div>
       </div>
+
+      {isTruncated && (
+        <p className="text-xs text-muted mb-3">
+          Showing last {filteredHistoryCount} sessions from the {selectedRangeLabel.toLowerCase()} window.
+        </p>
+      )}
 
       <div className="card glass mb-6" style={{ height: '300px', padding: 'var(--space-4) var(--space-2)' }}>
         {chartData.length > 0 ? (
@@ -168,7 +244,7 @@ export default function Progress() {
           </ResponsiveContainer>
         ) : (
           <div className="flex h-full items-center justify-center text-muted text-sm">
-            No history data available for this exercise.
+            No history data available for this exercise yet. Complete one workout containing {selectedEx?.name || 'this exercise'} to start seeing trends.
           </div>
         )}
       </div>
