@@ -61,6 +61,11 @@ function Dashboard() {
   const steps = todayMetrics.steps || 0;
   const weight = todayMetrics.weight || 0;
 
+  // Weight delta vs previous entry
+  const sortedMetrics = (db.healthMetrics || []).filter(m => m.weight > 0).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
+  const weightDelta = (weight && prevWeight) ? (weight - prevWeight).toFixed(1) : null;
+
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
@@ -156,16 +161,25 @@ function Dashboard() {
           </div>
           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
           <div className="flex-col items-center flex-1 text-center" onClick={() => {
-            const val = prompt("Enter today's weight (kg):", weight || 0);
-            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
+            const val = prompt("Enter today's weight (kg):", weight || '');
+            if(val && !isNaN(val) && parseFloat(val) > 0) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
           }}>
             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Weight ✎</span>
             <div className="h2 mt-1 mb-1 text-white">
-              {weight > 0 ? `${weight}kg` : '--'}
+              {weight > 0 ? `${weight}kg` : '— kg'}
             </div>
-            <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
-              Log
-            </span>
+            {weightDelta !== null ? (
+              <span className="badge text-[10px]" style={{
+                backgroundColor: Number(weightDelta) > 0 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+                color: Number(weightDelta) > 0 ? 'var(--warning)' : 'var(--success)'
+              }}>
+                {Number(weightDelta) > 0 ? '+' : ''}{weightDelta}kg vs prev
+              </span>
+            ) : (
+              <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
+                Log
+              </span>
+            )}
           </div>
         </div>
       </div>
@@ -395,6 +409,123 @@ function WorkoutSelect() {
   );
 }
 
+function ProfilePage({ session, injectMockData }) {
+  const { preferences: prefs, loading: prefsLoading } = usePreferences();
+  const user = session?.user;
+  const email = user?.email || '';
+  const initials = email
+    .split('@')[0]
+    .split(/[._-]/)
+    .map(p => p.charAt(0).toUpperCase())
+    .slice(0, 2)
+    .join('');
+  const memberSince = user?.created_at
+    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+    : '—';
+
+  const cardStyle = {
+    background: 'rgba(26, 26, 31, 0.85)',
+    boxShadow: 'var(--shadow-md)',
+    border: '1px solid var(--surface-border)',
+    borderRadius: 'var(--radius-xl)',
+    overflow: 'hidden'
+  };
+
+  return (
+    <div className="animate-fade-in p-4 pb-24">
+      {/* Avatar + Name */}
+      <div className="flex flex-col items-center text-center mt-4 mb-8">
+        <div style={{
+          width: '88px', height: '88px', borderRadius: '50%',
+          background: 'var(--gradient-main)',
+          display: 'flex', alignItems: 'center', justifyContent: 'center',
+          fontSize: '2rem', fontWeight: 700, color: '#fff',
+          marginBottom: '16px',
+          boxShadow: 'var(--shadow-glow)'
+        }}>
+          {initials || '?'}
+        </div>
+        <h1 className="h2 mb-1">My Profile</h1>
+        <span className="text-secondary text-sm">{email}</span>
+      </div>
+
+      {/* Account Info */}
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <User size={14} /> Account
+        </div>
+        <div className="p-4 flex flex-col gap-3">
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-muted">Email</span>
+            <span className="font-medium" style={{ maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-muted">Member Since</span>
+            <span className="font-medium">{memberSince}</span>
+          </div>
+          <div className="flex justify-between items-center text-sm">
+            <span className="text-muted">Status</span>
+            <span className="badge badge-success text-[10px]">Active</span>
+          </div>
+        </div>
+      </div>
+
+      {/* Preferences Summary */}
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <HeartPulse size={14} /> My Goals
+        </div>
+        {prefsLoading ? (
+          <div className="p-4 animate-pulse">
+            <div className="h-4 bg-black/20 rounded w-2/3 mb-2"></div>
+            <div className="h-4 bg-black/20 rounded w-1/2"></div>
+          </div>
+        ) : (
+          <div className="p-4 flex gap-3">
+            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+              <div className="text-xs text-muted mb-1">Sleep</div>
+              <div className="text-lg font-bold text-white">{prefs?.sleep_goal ?? 7.5}h</div>
+            </div>
+            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+              <div className="text-xs text-muted mb-1">Steps</div>
+              <div className="text-lg font-bold text-white">{((prefs?.step_goal ?? 8000) / 1000).toFixed(1)}k</div>
+            </div>
+            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+              <div className="text-xs text-muted mb-1">Weight</div>
+              <div className="text-lg font-bold text-white">{prefs?.weight_goal ?? '—'}{prefs?.weight_goal ? (prefs?.weight_goal_unit || 'kg') : ''}</div>
+            </div>
+          </div>
+        )}
+        <div className="px-4 pb-4">
+          <Link to="/health" className="text-xs text-accent-primary hover:underline">Edit goals in Health tab →</Link>
+        </div>
+      </div>
+
+      {/* Data Management */}
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <Database size={14} /> Data
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
+          <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
+            Inject Test Analytics
+          </button>
+        </div>
+      </div>
+
+      {/* Sign Out */}
+      <button
+        className="btn w-full flex justify-center items-center gap-2 mt-2"
+        style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '14px', borderRadius: 'var(--radius-xl)' }}
+        onClick={() => supabase.auth.signOut()}
+      >
+        <LogOut size={18} /> Sign Out
+      </button>
+    </div>
+  );
+}
+
 function Layout({ session }) {
   const { loading, error } = useData();
 
@@ -483,62 +614,7 @@ function Layout({ session }) {
           <Route path="/workouts/new" element={<NewWorkout />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/health" element={<Health />} />
-          <Route path="/profile" element={
-            <div className="animate-fade-in p-4 pb-20">
-              <div className="flex flex-col items-center justify-center text-center mt-6 mb-8">
-                <div style={{ padding: '4px', background: 'var(--gradient-main)', borderRadius: '50%', marginBottom: '16px' }}>
-                  <img src={`https://ui-avatars.com/api/?name=${session?.user?.email}&background=1a1a1f&color=fff&size=128`} alt="User Avatar" style={{ borderRadius: '50%', width: '96px', height: '96px', border: '4px solid var(--bg-color)' }} />
-                </div>
-                <h1 className="h2 mb-1">Athlete Profile</h1>
-                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)', fontSize: '0.85rem', padding: '4px 12px' }}>
-                  {session?.user?.email}
-                </span>
-              </div>
-              
-              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
-                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
-                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
-                    <User size={16} /> Account Info
-                  </h3>
-                </div>
-                <div className="p-4 flex flex-col gap-4">
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted text-sm">Member Since</span>
-                    <span className="font-medium text-sm">{new Date(session?.user?.created_at).toLocaleDateString()}</span>
-                  </div>
-                  <div className="flex justify-between items-center">
-                    <span className="text-muted text-sm">Status</span>
-                    <span className="badge badge-success text-[10px]">Active Pro</span>
-                  </div>
-                </div>
-              </div>
-
-              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
-                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
-                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
-                    <Database size={16} /> Data Management
-                  </h3>
-                </div>
-                <div className="p-4">
-                  <p className="text-xs text-muted mb-4 line-clamp-2">Need testing data? Inject 14 days of realistic mock workouts, sleep, and steps into your analytics dashboard.</p>
-                  <button 
-                    className="btn w-full btn-secondary text-sm" 
-                    onClick={injectMockData}
-                  >
-                    Inject Test Analytics
-                  </button>
-                </div>
-              </div>
-              
-              <button 
-                className="btn w-full flex justify-center items-center gap-2" 
-                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', padding: '12px' }} 
-                onClick={() => supabase.auth.signOut()}
-              >
-                <LogOut size={18} /> Sign Out
-              </button>
-            </div>
-          } />
+          <Route path="/profile" element={<ProfilePage session={session} injectMockData={injectMockData} />} />
         </Routes>
       </main>
       <BottomNav />
