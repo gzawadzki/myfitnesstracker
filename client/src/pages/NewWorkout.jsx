@@ -463,18 +463,15 @@ export default function NewWorkout() {
           </div>
 
           {/* Workout comment */}
-          <div className="mt-4 flex items-start gap-2" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-md)', padding: '8px 10px' }}>
-            <MessageSquare size={14} className="text-muted mt-1 flex-shrink-0" />
-            <textarea
-              className="w-full text-sm"
-              style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', minHeight: '28px', maxHeight: '80px', padding: 0, lineHeight: 1.4 }}
-              placeholder="Workout notes..."
-              value={workoutComment}
-              onChange={e => setWorkoutComment(e.target.value)}
-              rows={1}
-              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
-            />
-          </div>
+          <textarea
+            className="w-full text-sm"
+            style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-md)', padding: '10px 12px', resize: 'none', minHeight: '40px', maxHeight: '120px', lineHeight: 1.4, outline: 'none', marginTop: '16px', width: '100%', boxSizing: 'border-box' }}
+            placeholder="Workout notes..."
+            value={workoutComment}
+            onChange={e => setWorkoutComment(e.target.value)}
+            rows={2}
+            onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+          />
 
           {/* Action Buttons: Add Set | Skip | Swap */}
           <div className="flex gap-2 mt-4">
