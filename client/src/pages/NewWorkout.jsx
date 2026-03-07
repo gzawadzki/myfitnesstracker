@@ -4,9 +4,11 @@ import { useState, useEffect, useMemo } from 'react';
 import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
+import { useToast } from '../components/Toast';
 
 export default function NewWorkout() {
   const { db, saveWorkoutSession } = useData();
+  const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
@@ -94,12 +96,34 @@ export default function NewWorkout() {
         setRestTimer(prev => prev - 1);
       }, 1000);
     } else if (restTimer === 0) {
+      // Vibrate + beep when timer finishes
+      try {
+        navigator.vibrate?.([200, 100, 200]);
+        const audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+        const osc = audioCtx.createOscillator();
+        const gain = audioCtx.createGain();
+        osc.connect(gain);
+        gain.connect(audioCtx.destination);
+        osc.frequency.value = 880;
+        gain.gain.value = 0.3;
+        osc.start();
+        setTimeout(() => { osc.stop(); audioCtx.close(); }, 300);
+      } catch (e) { /* audio not available */ }
       setRestTimer(null);
     }
     return () => {
       if (interval) clearInterval(interval);
     };
   }, [restTimer]);
+
+  // Exit confirmation when workout has data
+  const hasData = Object.keys(setsData).length > 0;
+  useEffect(() => {
+    if (!hasData) return;
+    const handler = (e) => { e.preventDefault(); e.returnValue = ''; };
+    window.addEventListener('beforeunload', handler);
+    return () => window.removeEventListener('beforeunload', handler);
+  }, [hasData]);
 
   const addSet = () => {
     setSetsData({
@@ -207,10 +231,11 @@ export default function NewWorkout() {
         }
       }
       await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null);
+      toast.success('Workout saved!');
       navigate('/');
     } catch (err) {
       console.error("Failed to save workout:", err);
-      alert("Failed to save workout to Supabase. Check console logs.");
+      toast.error('Failed to save workout. Check console logs.');
     }
   };
 
@@ -230,8 +255,10 @@ export default function NewWorkout() {
           <div className="text-xs text-secondary">{phase?.name}</div>
           <div className="font-bold">{currentWorkout.name}</div>
         </div>
-        <button className="btn btn-primary" style={{ padding: '6px 12px' }} onClick={finishWorkout}>
-          <Save size={16} /> Finish
+        <button className="btn btn-secondary text-sm" style={{ padding: '6px 12px' }} onClick={() => {
+          if (!hasData || window.confirm('Discard this workout?')) navigate('/');
+        }}>
+          <X size={16} /> Cancel
         </button>
       </header>
       

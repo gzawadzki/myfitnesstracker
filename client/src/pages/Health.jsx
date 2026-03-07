@@ -1,7 +1,8 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
-import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings } from 'lucide-react';
+import { useToast } from '../components/Toast';
+import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, CheckCircle } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function getGoals(preferences) {
@@ -16,9 +17,14 @@ function getGoals(preferences) {
 export default function Health() {
   const { db, saveDailyHealthMetric, deleteDailyHealthMetric } = useData();
   const { preferences: prefs, savePreferences: saveUserPreferences, loading: prefsLoading } = usePreferences();
+  const toast = useToast();
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
+  const [savedFields, setSavedFields] = useState({});
+  const [showMoreSleep, setShowMoreSleep] = useState(false);
+  const [showMoreSteps, setShowMoreSteps] = useState(false);
+  const [showMoreWeight, setShowMoreWeight] = useState(false);
 
   // Get today's local date string (YYYY-MM-DD)
   const todayRaw = new Date();
@@ -37,7 +43,7 @@ export default function Health() {
   const [goalInputs, setGoalInputs] = useState({
     sleep_goal: goals.sleep,
     step_goal: goals.steps,
-    weight_goal: goals.weight || 80,
+    weight_goal: goals.weight || '',
     weight_goal_unit: goals.weightUnit
   });
 
@@ -48,7 +54,7 @@ export default function Health() {
       setGoalInputs({
         sleep_goal: updatedGoals.sleep,
         step_goal: updatedGoals.steps,
-        weight_goal: updatedGoals.weight || 80,
+        weight_goal: updatedGoals.weight || '',
         weight_goal_unit: updatedGoals.weightUnit
       });
     }
@@ -81,14 +87,28 @@ export default function Health() {
       }
 
       await saveDailyHealthMetric(todayStr, type, val);
+      setSavedFields(prev => ({ ...prev, [type]: true }));
+      setTimeout(() => setSavedFields(prev => ({ ...prev, [type]: false })), 2000);
 
     } catch (err) {
       console.error(err);
       const msg = err?.message || err?.details || 'Failed to save metrics. Check connection.';
       setError(msg);
+      toast.error(msg);
     } finally {
       setSaving(false);
     }
+  };
+
+  const handleSaveAll = async () => {
+    const toSave = [];
+    if (sleepInput) toSave.push('sleep_hours');
+    if (stepsInput) toSave.push('steps');
+    if (weightInput) toSave.push('weight');
+    for (const type of toSave) {
+      await handleSave(type);
+    }
+    if (toSave.length > 0) toast.success('All metrics saved');
   };
 
   const handleSaveGoals = async () => {
@@ -116,6 +136,7 @@ export default function Health() {
     try {
       setDeletingId(`${dateStr}-${type}`);
       await deleteDailyHealthMetric(dateStr, type);
+      toast.success(`${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} record deleted`);
     } catch (err) {
       console.error(err);
       setError("Failed to delete record.");
@@ -262,7 +283,7 @@ export default function Health() {
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Sleep (Hours)</label>
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Sleep (Hours) {savedFields.sleep_hours && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
           <div className="flex gap-2">
             <input
               type="number"
@@ -288,7 +309,7 @@ export default function Health() {
             <p className="text-xs text-muted">No sleep data recorded yet.</p>
           ) : (
             <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.sleep_hours).slice(0, 5).map((m, idx) => (
+              {recentMetrics.filter(m => m.sleep_hours).slice(0, showMoreSleep ? 10 : 5).map((m, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
@@ -308,6 +329,15 @@ export default function Health() {
               ))}
             </div>
           )}
+          {recentMetrics.filter(m => m.sleep_hours).length > 5 && (
+            <button
+              className="text-xs text-accent-primary mt-2 hover:underline"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setShowMoreSleep(!showMoreSleep)}
+            >
+              {showMoreSleep ? 'Show less' : `Show more (${recentMetrics.filter(m => m.sleep_hours).length} total)`}
+            </button>
+          )}
         </div>
       </div>
 
@@ -318,7 +348,7 @@ export default function Health() {
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Step Count</label>
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Step Count {savedFields.steps && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
           <div className="flex gap-2">
             <input
               type="number"
@@ -343,7 +373,7 @@ export default function Health() {
             <p className="text-xs text-muted">No step data recorded yet.</p>
           ) : (
             <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.steps).slice(0, 5).map((m, idx) => (
+              {recentMetrics.filter(m => m.steps).slice(0, showMoreSteps ? 10 : 5).map((m, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
@@ -363,22 +393,29 @@ export default function Health() {
               ))}
             </div>
           )}
+          {recentMetrics.filter(m => m.steps).length > 5 && (
+            <button
+              className="text-xs text-accent-primary mt-2 hover:underline"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setShowMoreSteps(!showMoreSteps)}
+            >
+              {showMoreSteps ? 'Show less' : `Show more (${recentMetrics.filter(m => m.steps).length} total)`}
+            </button>
+          )}
         </div>
       </div>
-
-      {/* Weight Card */}
       <div className="card glass mx-4 mb-4">
         <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
           <Scale className="text-accent-primary" /> Weight Tracker
         </div>
 
         <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({goals.weightUnit})</label>
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({goals.weightUnit}) {savedFields.weight && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
           <div className="flex gap-2">
             <input
               type="number"
               className="input flex-1"
-              placeholder={`e.g. ${goals.weight || 80}`}
+              placeholder={goals.weight ? `e.g. ${goals.weight}` : 'e.g. 75'}
               step="0.1"
               value={weightInput}
               onChange={(e) => setWeightInput(e.target.value)}
@@ -462,7 +499,7 @@ export default function Health() {
             <p className="text-xs text-muted">No weight data recorded yet.</p>
           ) : (
             <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.weight).slice(0, 5).map((m, idx) => (
+              {recentMetrics.filter(m => m.weight).slice(0, showMoreWeight ? 10 : 5).map((m, idx) => (
                 <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
@@ -479,8 +516,26 @@ export default function Health() {
               ))}
             </div>
           )}
+          {recentMetrics.filter(m => m.weight).length > 5 && (
+            <button
+              className="text-xs text-accent-primary mt-2 hover:underline"
+              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
+              onClick={() => setShowMoreWeight(!showMoreWeight)}
+            >
+              {showMoreWeight ? 'Show less' : `Show more (${recentMetrics.filter(m => m.weight).length} total)`}
+            </button>
+          )}
         </div>
       </div>
+
+      {/* Save All Button */}
+      {(sleepInput || stepsInput || weightInput) && (
+        <div className="mx-4 mb-6">
+          <button className="btn btn-primary btn-block text-sm" onClick={handleSaveAll} disabled={saving}>
+            <Save size={16} /> {saving ? 'Saving...' : 'Save All Metrics'}
+          </button>
+        </div>
+      )}
 
     </div>
   );

@@ -56,10 +56,7 @@ export default function ProfilePage({ session, injectMockData }) {
             <span className="text-muted">Member Since</span>
             <span className="font-medium">{memberSince}</span>
           </div>
-          <div className="flex justify-between items-center text-sm">
-            <span className="text-muted">Status</span>
-            <span className="badge badge-success text-[10px]">Active</span>
-          </div>
+
         </div>
       </div>
 
@@ -93,17 +90,19 @@ export default function ProfilePage({ session, injectMockData }) {
         </div>
       </div>
 
-      <div style={cardStyle} className="mb-4">
-        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
-          <Database size={14} /> Data
+      {injectMockData && (
+        <div style={cardStyle} className="mb-4">
+          <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+            <Database size={14} /> Data
+          </div>
+          <div className="p-4">
+            <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
+            <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
+              Inject Test Analytics
+            </button>
+          </div>
         </div>
-        <div className="p-4">
-          <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
-          <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
-            Inject Test Analytics
-          </button>
-        </div>
-      </div>
+      )}
 
       <button
         className="btn w-full flex justify-center items-center gap-2 mt-2"

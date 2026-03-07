@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
 import { Activity } from 'lucide-react';
 import { supabase } from './lib/supabase';
 import { useData } from './context/DataContext';
+import { useToast } from './components/Toast';
 import Login from './pages/Login';
 import BottomNav from './components/BottomNav';
 import Dashboard from './pages/Dashboard';
@@ -15,6 +16,7 @@ import ProfilePage from './pages/Profile';
 
 function Layout({ session }) {
   const { loading, error } = useData();
+  const toast = useToast();
 
   if (loading) {
     return (
@@ -84,10 +86,10 @@ function Layout({ session }) {
         }
         await supabase.from('logged_sets').insert(sets);
       }
-      alert("✅ Mock Data Setup Complete! Refresh the app to view Analytics.");
-      window.location.reload();
+      toast.success('Mock data injected! Refreshing…');
+      setTimeout(() => window.location.reload(), 1500);
     } catch (err) {
-      alert("Injection Failed: " + err.message);
+      toast.error('Injection failed: ' + err.message);
     }
   };
 
@@ -101,7 +103,7 @@ function Layout({ session }) {
           <Route path="/workouts/new" element={<NewWorkout />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/health" element={<Health />} />
-          <Route path="/profile" element={<ProfilePage session={session} injectMockData={injectMockData} />} />
+          <Route path="/profile" element={<ProfilePage session={session} injectMockData={import.meta.env.DEV ? injectMockData : null} />} />
         </Routes>
       </main>
       <BottomNav />

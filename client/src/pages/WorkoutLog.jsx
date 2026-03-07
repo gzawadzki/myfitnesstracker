@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { Trash2 } from 'lucide-react';
 import { useData } from '../context/DataContext';
+import { useToast } from '../components/Toast';
 
 export default function WorkoutLog() {
   const { db, deleteWorkoutSession } = useData();
+  const toast = useToast();
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
 
@@ -61,12 +63,13 @@ export default function WorkoutLog() {
                       className="p-1 text-muted hover:text-warning transition-colors"
                       onClick={async (e) => {
                         e.stopPropagation();
-                        if(window.confirm("Are you sure you want to delete this workout?")) {
+                        if(window.confirm("Delete this workout session?")) {
                           try {
                             setDeletingId(session.id);
                             await deleteWorkoutSession(session.id);
+                            toast.success('Workout deleted');
                           } catch (err) {
-                            alert("Failed to delete: " + err.message);
+                            toast.error('Failed to delete: ' + err.message);
                             setDeletingId(null);
                           }
                         }
