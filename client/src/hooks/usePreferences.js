@@ -28,10 +28,10 @@ export function usePreferences() {
           .from('user_preferences')
           .select('*')
           .eq('user_id', userData.user.id)
-          .single();
+          .maybeSingle();
 
-        if (error && error.code !== 'PGRST116') { // not found error is fine
-          throw error;
+        if (error) {
+          console.warn("Preferences fetch error:", error);
         }
 
         if (isMounted) {
@@ -40,7 +40,10 @@ export function usePreferences() {
         }
       } catch (err) {
         console.error("Error loading preferences:", err);
-        if (isMounted) setError(err);
+        if (isMounted) {
+          setPreferences(getDefaultPreferences());
+          setError(err);
+        }
       } finally {
         if (isMounted) setLoading(false);
       }
