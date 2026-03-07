@@ -157,18 +157,33 @@ export function DataProvider({ children }) {
 
   const saveDailyHealthMetric = async (dateStr, type, value) => {
     // type can be 'sleep_hours', 'steps', or 'weight'
-    const updatePayload = { date: dateStr };
-    updatePayload[type] = value;
-    
-    // We must ensure user_id is passed for a safe UPSERT that respects RLS/unique constraint
     const { data: userData } = await supabase.auth.getUser();
-    if (userData?.user?.id) {
-       updatePayload.user_id = userData.user.id;
-    }
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error("Not logged in");
 
+    // Step 1: Read existing row for this date (if any) so we don't overwrite other columns
+    const { data: existing } = await supabase
+      .from('health_metrics')
+      .select('*')
+      .eq('user_id', userId)
+      .eq('date', dateStr)
+      .maybeSingle();
+
+    // Step 2: Merge — keep existing values, only update the target column
+    const mergedPayload = {
+      user_id: userId,
+      date: dateStr,
+      sleep_hours: existing?.sleep_hours ?? null,
+      steps: existing?.steps ?? null,
+      weight: existing?.weight ?? null,
+      weight_unit: existing?.weight_unit ?? null,
+    };
+    mergedPayload[type] = value;
+
+    // Step 3: Upsert the merged row
     const { data, error } = await supabase
       .from('health_metrics')
-      .upsert(updatePayload, { onConflict: 'user_id,date' })
+      .upsert(mergedPayload, { onConflict: 'user_id,date' })
       .select()
       .single();
 
