@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { useToast } from '../components/Toast';
-import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, CheckCircle, Heart, Flame } from 'lucide-react';
+import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, Heart, Flame } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function getGoals(preferences) {
@@ -22,15 +22,11 @@ export default function Health() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
   const [savedFields, setSavedFields] = useState({});
-  const [showMoreSleep, setShowMoreSleep] = useState(false);
-  const [showMoreSteps, setShowMoreSteps] = useState(false);
-  const [showMoreWeight, setShowMoreWeight] = useState(false);
 
-  // Get today's local date string (YYYY-MM-DD)
+  // Get today's local date string
   const todayRaw = new Date();
   const offset = todayRaw.getTimezoneOffset() * 60000;
   const todayStr = (new Date(todayRaw - offset)).toISOString().split('T')[0];
-
   const todayMetrics = db.healthMetrics?.find(m => m.date === todayStr) || {};
 
   const [sleepInput, setSleepInput] = useState(todayMetrics.sleep_hours || "");
@@ -38,10 +34,8 @@ export default function Health() {
   const [weightInput, setWeightInput] = useState(todayMetrics.weight || "");
   const [heartRateInput, setHeartRateInput] = useState(todayMetrics.heart_rate || "");
   const [caloriesInput, setCaloriesInput] = useState(todayMetrics.calories_burned || "");
-  const [showMoreHR, setShowMoreHR] = useState(false);
-  const [showMoreCal, setShowMoreCal] = useState(false);
 
-  // Goal Settings State
+  // Goals
   const goals = getGoals(prefs);
   const [showGoals, setShowGoals] = useState(false);
   const [goalInputs, setGoalInputs] = useState({
@@ -51,64 +45,45 @@ export default function Health() {
     weight_goal_unit: goals.weightUnit
   });
 
-  // Sync state once preferences load
   React.useEffect(() => {
     if (prefs) {
-      const updatedGoals = getGoals(prefs);
-      setGoalInputs({
-        sleep_goal: updatedGoals.sleep,
-        step_goal: updatedGoals.steps,
-        weight_goal: updatedGoals.weight || '',
-        weight_goal_unit: updatedGoals.weightUnit
-      });
+      const g = getGoals(prefs);
+      setGoalInputs({ sleep_goal: g.sleep, step_goal: g.steps, weight_goal: g.weight || '', weight_goal_unit: g.weightUnit });
     }
   }, [prefs]);
 
+  // Expand state
+  const [expandedCard, setExpandedCard] = useState(null);
+  const toggle = (card) => setExpandedCard(prev => prev === card ? null : card);
+
+  // Save single metric
   const handleSave = async (type) => {
     try {
       setSaving(true);
       setError(null);
-
       let val;
       if (type === 'sleep_hours') {
         val = parseFloat(sleepInput);
-        if (isNaN(val) || val <= 0 || val > 24) {
-          setError('Sleep must be between 0 and 24 hours.');
-          return;
-        }
+        if (isNaN(val) || val <= 0 || val > 24) { setError('Sleep must be 0–24h.'); return; }
       } else if (type === 'steps') {
         val = parseInt(stepsInput);
-        if (isNaN(val) || val <= 0) {
-          setError('Steps must be a positive number.');
-          return;
-        }
+        if (isNaN(val) || val <= 0) { setError('Steps must be positive.'); return; }
       } else if (type === 'weight') {
         val = parseFloat(weightInput);
-        if (isNaN(val) || val < 20 || val > 500) {
-          setError('Weight must be between 20 and 500.');
-          return;
-        }
+        if (isNaN(val) || val < 20 || val > 500) { setError('Weight must be 20–500.'); return; }
       } else if (type === 'heart_rate') {
         val = parseInt(heartRateInput);
-        if (isNaN(val) || val < 30 || val > 250) {
-          setError('Heart rate must be between 30 and 250 BPM.');
-          return;
-        }
+        if (isNaN(val) || val < 30 || val > 250) { setError('HR must be 30–250 BPM.'); return; }
       } else if (type === 'calories_burned') {
         val = parseInt(caloriesInput);
-        if (isNaN(val) || val <= 0) {
-          setError('Calories must be a positive number.');
-          return;
-        }
+        if (isNaN(val) || val <= 0) { setError('Calories must be positive.'); return; }
       }
-
       await saveDailyHealthMetric(todayStr, type, val);
       setSavedFields(prev => ({ ...prev, [type]: true }));
       setTimeout(() => setSavedFields(prev => ({ ...prev, [type]: false })), 2000);
-
     } catch (err) {
       console.error(err);
-      const msg = err?.message || err?.details || 'Failed to save metrics. Check connection.';
+      const msg = err?.message || 'Failed to save.';
       setError(msg);
       toast.error(msg);
     } finally {
@@ -123,9 +98,7 @@ export default function Health() {
     if (weightInput) toSave.push('weight');
     if (heartRateInput) toSave.push('heart_rate');
     if (caloriesInput) toSave.push('calories_burned');
-    for (const type of toSave) {
-      await handleSave(type);
-    }
+    for (const t of toSave) await handleSave(t);
     if (toSave.length > 0) toast.success('All metrics saved');
   };
 
@@ -142,19 +115,16 @@ export default function Health() {
     }
   };
 
-  const recentMetrics = (db.healthMetrics || []).slice(0, 14); // Last 14 days
-
-  const formatShortDate = (isoString) => {
-    return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
-  };
+  const recentMetrics = (db.healthMetrics || []).slice(0, 14);
+  const formatShortDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
   const handleDelete = async (dateStr, type) => {
-    const typeLabel = type === 'sleep_hours' ? 'sleep' : type === 'steps' ? 'step' : type === 'heart_rate' ? 'heart rate' : type === 'calories_burned' ? 'calories' : 'weight';
-    if (!window.confirm(`Delete ${typeLabel} record for ${formatShortDate(dateStr)}?`)) return;
+    const label = { sleep_hours: 'sleep', steps: 'step', weight: 'weight', heart_rate: 'heart rate', calories_burned: 'calories' }[type];
+    if (!window.confirm(`Delete ${label} record for ${formatShortDate(dateStr)}?`)) return;
     try {
       setDeletingId(`${dateStr}-${type}`);
       await deleteDailyHealthMetric(dateStr, type);
-      toast.success(`${typeLabel.charAt(0).toUpperCase() + typeLabel.slice(1)} record deleted`);
+      toast.success(`${label.charAt(0).toUpperCase() + label.slice(1)} record deleted`);
     } catch (err) {
       console.error(err);
       setError("Failed to delete record.");
@@ -163,51 +133,60 @@ export default function Health() {
     }
   };
 
-  // Calculate Insights
+  // Insights
   const calcAvg = (metrics, days, type) => {
-    const cutoff = new Date();
-    cutoff.setDate(cutoff.getDate() - days);
-    const subset = metrics.filter(m => new Date(m.date) >= cutoff && m[type] !== null && m[type] !== undefined);
-    if (subset.length === 0) return 0;
-    const sum = subset.reduce((acc, m) => acc + Number(m[type]), 0);
-    return sum / subset.length;
+    const cutoff = new Date(); cutoff.setDate(cutoff.getDate() - days);
+    const subset = metrics.filter(m => new Date(m.date) >= cutoff && m[type] != null);
+    if (!subset.length) return 0;
+    return subset.reduce((a, m) => a + Number(m[type]), 0) / subset.length;
   };
-
   const calcStreak = (metrics, type, threshold) => {
-    let streak = 0;
-    for (let m of metrics) {
-      if (m[type] !== null && m[type] !== undefined && Number(m[type]) >= threshold) streak++;
-      else break;
-    }
-    return streak;
+    let s = 0;
+    for (let m of metrics) { if (m[type] != null && Number(m[type]) >= threshold) s++; else break; }
+    return s;
   };
 
   const sleepAvg7 = calcAvg(db.healthMetrics || [], 7, 'sleep_hours').toFixed(1);
   const stepsAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'steps'));
   const weightAvg7 = calcAvg(db.healthMetrics || [], 7, 'weight').toFixed(1);
-
   const sleepAvg30 = calcAvg(db.healthMetrics || [], 30, 'sleep_hours').toFixed(1);
   const stepsAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'steps'));
   const weightAvg30 = calcAvg(db.healthMetrics || [], 30, 'weight').toFixed(1);
-
   const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', goals.sleep);
   const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.steps);
-
   const hrAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'heart_rate'));
   const hrAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'heart_rate'));
   const calAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'calories_burned'));
   const calAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'calories_burned'));
 
-  // Weight Sparkline Data (Last 30 days)
-  const thirtyDaysAgo = new Date();
-  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+  // Weight chart data
+  const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const weightHistoryData = (db.healthMetrics || [])
     .filter(m => m.weight && new Date(m.date) >= thirtyDaysAgo)
     .reverse()
-    .map(m => ({
-      date: formatShortDate(m.date),
-      weight: Number(m.weight)
-    }));
+    .map(m => ({ date: formatShortDate(m.date), weight: Number(m.weight) }));
+
+  // History renderer
+  const renderHistory = (items, field, formatValue, formatBadge) => {
+    const filtered = items.filter(m => m[field]);
+    if (!filtered.length) return <p className="text-xs text-muted mt-3">No data yet.</p>;
+    return (
+      <div className="mt-4 flex-col gap-2">
+        {filtered.slice(0, 10).map((m, i) => (
+          <div key={i} className="flex justify-between items-center text-xs p-2 rounded" style={{ background: 'var(--bg-color)' }}>
+            <span className="text-muted">{formatShortDate(m.date)}</span>
+            <span className="font-semibold flex items-center gap-2">
+              {formatValue(m)}
+              {formatBadge && formatBadge(m)}
+              <button className="p-1 text-muted hover:text-warning transition-colors" onClick={() => handleDelete(m.date, field)} disabled={deletingId === `${m.date}-${field}`}>
+                <Trash2 size={12} />
+              </button>
+            </span>
+          </div>
+        ))}
+      </div>
+    );
+  };
 
   if (prefsLoading) {
     return (
@@ -215,8 +194,9 @@ export default function Health() {
         <div className="h-8 bg-black/20 rounded w-1/3 mb-2"></div>
         <div className="h-4 bg-black/20 rounded w-1/2 mb-6"></div>
         <div className="h-40 bg-black/20 rounded-xl mx-4 mb-6"></div>
-        <div className="h-48 bg-black/20 rounded-xl mx-4 mb-4"></div>
-        <div className="h-48 bg-black/20 rounded-xl mx-4 mb-4"></div>
+        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
+        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
+        <div className="h-16 bg-black/20 rounded-xl mx-4 mb-3"></div>
       </div>
     );
   }
@@ -229,24 +209,24 @@ export default function Health() {
       </header>
 
       {error && (
-        <div className="mx-4 mb-4 p-3 badge text-xs" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--warning)', border: '1px solid var(--surface-border)', display: 'flex', alignItems: 'center', gap: '8px' }}>
+        <div className="mx-4 mb-4 p-3 rounded-lg text-xs" style={{ background: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)', border: '1px solid rgba(239, 68, 68, 0.2)', display: 'flex', alignItems: 'center', gap: '8px' }}>
           <AlertCircle size={14} /> {error}
         </div>
       )}
 
-      {/* Insights Card */}
+      {/* ── Insights ─────────────────────────────── */}
       <div className="card glass mx-4 mb-6" style={{ background: 'var(--gradient-card)' }}>
         <div className="flex items-center justify-between mb-4">
           <div className="flex items-center gap-2 font-bold text-white">
-            <TrendingUp size={20} /> Insights & Statistics
+            <TrendingUp size={18} /> Insights
           </div>
           <button onClick={() => setShowGoals(!showGoals)} className="btn-icon text-secondary hover:text-white transition-colors">
-            <Settings size={18} />
+            <Settings size={16} />
           </button>
         </div>
 
         {showGoals && (
-          <div className="mb-4 p-4 rounded bg-black/40 border border-white/10">
+          <div className="mb-4 p-4 rounded-lg bg-black/40 border border-white/10">
             <h4 className="text-sm font-bold text-white mb-3">My Targets</h4>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
@@ -258,7 +238,7 @@ export default function Health() {
                 <input type="number" className="input w-full p-1 text-sm h-8" value={goalInputs.step_goal} onChange={e => setGoalInputs({ ...goalInputs, step_goal: e.target.value })} />
               </div>
               <div>
-                <label className="text-xs text-secondary mb-1 block">Weight</label>
+                <label className="text-xs text-secondary mb-1 block">Weight ({goals.weightUnit})</label>
                 <input type="number" step="0.1" className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal} onChange={e => setGoalInputs({ ...goalInputs, weight_goal: e.target.value })} />
               </div>
               <div>
@@ -278,426 +258,221 @@ export default function Health() {
         <div className="flex gap-4">
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Sleep</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{sleepAvg7}h</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{sleepAvg30}h</strong></div>
-            <div className="text-sm mt-1">Streak: <strong className="text-success">{sleepStreak} days</strong> (≥{goals.sleep}h)</div>
+            <div className="text-sm">7d: <strong className="text-white">{sleepAvg7}h</strong> · 30d: <strong className="text-white">{sleepAvg30}h</strong></div>
+            <div className="text-xs text-success mt-1">🔥 {sleepStreak} day streak</div>
           </div>
           <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Steps</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{stepsAvg7.toLocaleString()}</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{stepsAvg30.toLocaleString()}</strong></div>
-            <div className="text-sm mt-1">Streak: <strong className="text-success">{stepsStreak} days</strong> (≥{(goals.steps / 1000).toFixed(1)}k)</div>
+            <div className="text-sm">7d: <strong className="text-white">{stepsAvg7.toLocaleString()}</strong> · 30d: <strong className="text-white">{stepsAvg30.toLocaleString()}</strong></div>
+            <div className="text-xs text-success mt-1">🔥 {stepsStreak} day streak</div>
           </div>
-          <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
+        </div>
+        <div className="flex gap-4 mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Weight</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${goals.weightUnit}` : '--'}</strong></div>
-            <div className="text-sm mt-1">🎯 <strong className="text-white">{goals.weight || '--'}</strong> {goals.weightUnit}</div>
-          </div>
-        </div>
-        {/* HR + Calories Insights */}
-        <div className="flex gap-4 mt-4 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.05)' }}>
-          <div className="flex-1">
-            <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Heart Rate</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{hrAvg7 > 0 ? `${hrAvg7} bpm` : '--'}</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{hrAvg30 > 0 ? `${hrAvg30} bpm` : '--'}</strong></div>
+            <div className="text-sm">7d: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</strong> · 30d: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${goals.weightUnit}` : '--'}</strong></div>
+            <div className="text-xs text-muted mt-1">🎯 {goals.weight || '--'} {goals.weightUnit}</div>
           </div>
           <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
           <div className="flex-1">
-            <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Calories</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{calAvg7 > 0 ? calAvg7.toLocaleString() : '--'}</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{calAvg30 > 0 ? calAvg30.toLocaleString() : '--'}</strong></div>
+            <div className="text-xs text-secondary mb-1 uppercase tracking-wider">HR / Cal</div>
+            <div className="text-sm">HR: <strong className="text-white">{hrAvg7 > 0 ? `${hrAvg7}bpm` : '--'}</strong> · Cal: <strong className="text-white">{calAvg7 > 0 ? calAvg7.toLocaleString() : '--'}</strong></div>
           </div>
         </div>
       </div>
 
-      {/* Sleep Card */}
-      <div className="card glass mx-4 mb-4">
-        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
-          <Moon className="text-accent-primary" /> Sleep Tracker
-        </div>
+      {/* ── Expandable Tracker Cards ──────────────── */}
 
-        <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Sleep (Hours) {savedFields.sleep_hours && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="input flex-1"
-              placeholder="e.g. 7.5"
-              step="0.1"
-              value={sleepInput}
-              onChange={(e) => setSleepInput(e.target.value)}
-            />
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSave('sleep_hours')}
-              disabled={saving || !sleepInput}
-            >
-              {saving ? '...' : <Save size={20} />}
-            </button>
+      {/* Sleep */}
+      <div className="card glass mx-4 mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggle('sleep')} style={{ background: expandedCard === 'sleep' ? 'var(--surface-hover)' : 'transparent' }}>
+          <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(99, 102, 241, 0.15)' }}>
+            <Moon size={18} style={{ color: '#818cf8' }} />
           </div>
-        </div>
-
-        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
-          <h4 className="text-sm font-bold mb-3">Recent History</h4>
-          {recentMetrics.filter(m => m.sleep_hours).length === 0 ? (
-            <p className="text-xs text-muted">No sleep data recorded yet.</p>
-          ) : (
-            <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.sleep_hours).slice(0, showMoreSleep ? 10 : 5).map((m, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
-                  <span className="text-secondary">{formatShortDate(m.date)}</span>
-                  <span className="font-bold flex items-center gap-2">
-                    {m.sleep_hours}h
-                    <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>
-                      {m.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}
-                    </span>
-                    <button
-                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
-                      onClick={() => handleDelete(m.date, 'sleep_hours')}
-                      disabled={deletingId === `${m.date}-sleep_hours`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {recentMetrics.filter(m => m.sleep_hours).length > 5 && (
-            <button
-              className="text-xs text-accent-primary mt-2 hover:underline"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => setShowMoreSleep(!showMoreSleep)}
-            >
-              {showMoreSleep ? 'Show less' : `Show more (${recentMetrics.filter(m => m.sleep_hours).length} total)`}
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* Steps Card */}
-      <div className="card glass mx-4 mb-4">
-        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
-          <Footprints className="text-accent-primary" /> Steps Tracker
-        </div>
-
-        <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Step Count {savedFields.steps && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="input flex-1"
-              placeholder="e.g. 10000"
-              value={stepsInput}
-              onChange={(e) => setStepsInput(e.target.value)}
-            />
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSave('steps')}
-              disabled={saving || !stepsInput}
-            >
-              {saving ? '...' : <Save size={20} />}
-            </button>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm">Sleep</div>
+            <div className="text-xs text-muted">7d avg: {sleepAvg7}h</div>
           </div>
-        </div>
-
-        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
-          <h4 className="text-sm font-bold mb-3">Recent History</h4>
-          {recentMetrics.filter(m => m.steps).length === 0 ? (
-            <p className="text-xs text-muted">No step data recorded yet.</p>
-          ) : (
-            <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.steps).slice(0, showMoreSteps ? 10 : 5).map((m, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
-                  <span className="text-secondary">{formatShortDate(m.date)}</span>
-                  <span className="font-bold flex items-center gap-2">
-                    {m.steps.toLocaleString()}
-                    <span className="badge text-[10px]" style={m.steps >= goals.steps ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>
-                      {m.steps >= goals.steps ? 'Active' : 'Low'}
-                    </span>
-                    <button
-                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
-                      onClick={() => handleDelete(m.date, 'steps')}
-                      disabled={deletingId === `${m.date}-steps`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {recentMetrics.filter(m => m.steps).length > 5 && (
-            <button
-              className="text-xs text-accent-primary mt-2 hover:underline"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => setShowMoreSteps(!showMoreSteps)}
-            >
-              {showMoreSteps ? 'Show less' : `Show more (${recentMetrics.filter(m => m.steps).length} total)`}
-            </button>
-          )}
-        </div>
-      </div>
-      <div className="card glass mx-4 mb-4">
-        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
-          <Scale className="text-accent-primary" /> Weight Tracker
-        </div>
-
-        <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({goals.weightUnit}) {savedFields.weight && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="input flex-1"
-              placeholder={goals.weight ? `e.g. ${goals.weight}` : 'e.g. 75'}
-              step="0.1"
-              value={weightInput}
-              onChange={(e) => setWeightInput(e.target.value)}
-            />
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSave('weight')}
-              disabled={saving || !weightInput}
-            >
-              {saving ? '...' : <Save size={20} />}
-            </button>
-          </div>
-        </div>
-
-        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
-          <div className="flex justify-between items-center mb-3">
-            <h4 className="text-sm font-bold">Recent History</h4>
-            {weightHistoryData.length > 1 && (
-              <span className="text-xs text-muted flex items-center gap-1"><TrendingUp size={12} /> 30d Trend</span>
+          <div className="text-right">
+            <div className="font-bold text-white">{todayMetrics.sleep_hours ? `${todayMetrics.sleep_hours}h` : '—'}</div>
+            {todayMetrics.sleep_hours && (
+              <span className="text-[10px]" style={{ color: todayMetrics.sleep_hours >= goals.sleep ? 'var(--success)' : 'var(--warning)' }}>
+                {todayMetrics.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}
+              </span>
             )}
           </div>
-          {weightHistoryData.length > 1 && (
-            <div style={{ height: '200px', width: '100%', marginBottom: '16px' }}>
-              <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weightHistoryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
-                  <defs>
-                    <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
-                      <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
-                      <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
-                    </linearGradient>
-                  </defs>
-                  <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
-                  <XAxis 
-                    dataKey="date" 
-                    stroke="var(--text-muted)" 
-                    fontSize={11} 
-                    tickLine={false} 
-                    axisLine={false} 
-                  />
-                  <YAxis 
-                    domain={['dataMin - 0.5', 'dataMax + 0.5']} 
-                    stroke="var(--text-muted)" 
-                    fontSize={11} 
-                    tickLine={false} 
-                    axisLine={false}
-                    tickFormatter={v => `${Number(v).toFixed(1)}`}
-                    width={45}
-                  />
-                  <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', fontSize: '13px', padding: '8px 12px' }}
-                    itemStyle={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}
-                    labelStyle={{ color: 'var(--text-secondary)', marginBottom: '4px' }}
-                    formatter={v => [`${v} kg`, 'Weight']}
-                  />
-                  <Line 
-                    type="monotone" 
-                    dataKey="weight" 
-                    stroke="var(--accent-primary)" 
-                    strokeWidth={2.5}
-                    dot={{ fill: 'var(--accent-primary)', stroke: 'var(--surface-color)', strokeWidth: 2, r: 5 }}
-                    activeDot={{ r: 7, fill: 'var(--accent-primary)', stroke: 'white', strokeWidth: 2 }}
-                    fill="url(#weightGradient)"
-                  />
-                  {goals.weight && (
-                    <Line 
-                      type="monotone" 
-                      dataKey={() => goals.weight} 
-                      stroke="var(--success)" 
-                      strokeDasharray="5 5" 
-                      strokeWidth={1.5}
-                      dot={false}
-                      name="Goal"
-                    />
-                  )}
-                </LineChart>
-              </ResponsiveContainer>
-            </div>
-          )}
-
-          {recentMetrics.filter(m => m.weight).length === 0 ? (
-            <p className="text-xs text-muted">No weight data recorded yet.</p>
-          ) : (
-            <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.weight).slice(0, showMoreWeight ? 10 : 5).map((m, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
-                  <span className="text-secondary">{formatShortDate(m.date)}</span>
-                  <span className="font-bold flex items-center gap-2">
-                    {m.weight} {m.weight_unit || goals.weightUnit}
-                    <button
-                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
-                      onClick={() => handleDelete(m.date, 'weight')}
-                      disabled={deletingId === `${m.date}-weight`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </div>
-              ))}
-            </div>
-          )}
-          {recentMetrics.filter(m => m.weight).length > 5 && (
-            <button
-              className="text-xs text-accent-primary mt-2 hover:underline"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => setShowMoreWeight(!showMoreWeight)}
-            >
-              {showMoreWeight ? 'Show less' : `Show more (${recentMetrics.filter(m => m.weight).length} total)`}
-            </button>
-          )}
         </div>
+        {expandedCard === 'sleep' && (
+          <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <div className="flex gap-2 mt-4">
+              <input type="number" step="0.1" className="input flex-1" placeholder="Hours (e.g. 7.5)" value={sleepInput} onChange={e => setSleepInput(e.target.value)} />
+              <button className="btn btn-primary" onClick={() => handleSave('sleep_hours')} disabled={saving || !sleepInput}>
+                {saving ? '...' : <Save size={18} />}
+              </button>
+            </div>
+            {savedFields.sleep_hours && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
+            {renderHistory(recentMetrics, 'sleep_hours',
+              m => `${m.sleep_hours}h`,
+              m => <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Heart Rate Card */}
-      <div className="card glass mx-4 mb-4">
-        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
-          <Heart className="text-accent-primary" /> Heart Rate
-        </div>
-
-        <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Resting HR (BPM) {savedFields.heart_rate && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="input flex-1"
-              placeholder="e.g. 65"
-              value={heartRateInput}
-              onChange={(e) => setHeartRateInput(e.target.value)}
-            />
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSave('heart_rate')}
-              disabled={saving || !heartRateInput}
-            >
-              {saving ? '...' : <Save size={20} />}
-            </button>
+      {/* Steps */}
+      <div className="card glass mx-4 mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggle('steps')} style={{ background: expandedCard === 'steps' ? 'var(--surface-hover)' : 'transparent' }}>
+          <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(16, 185, 129, 0.15)' }}>
+            <Footprints size={18} style={{ color: '#10b981' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm">Steps</div>
+            <div className="text-xs text-muted">7d avg: {stepsAvg7.toLocaleString()}</div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-white">{todayMetrics.steps ? todayMetrics.steps.toLocaleString() : '—'}</div>
+            {todayMetrics.steps && (
+              <span className="text-[10px]" style={{ color: todayMetrics.steps >= goals.steps ? 'var(--success)' : 'var(--warning)' }}>
+                {todayMetrics.steps >= goals.steps ? 'Active' : 'Low'}
+              </span>
+            )}
           </div>
         </div>
-
-        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
-          <h4 className="text-sm font-bold mb-3">Recent History</h4>
-          {recentMetrics.filter(m => m.heart_rate).length === 0 ? (
-            <p className="text-xs text-muted">No heart rate data recorded yet.</p>
-          ) : (
-            <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.heart_rate).slice(0, showMoreHR ? 10 : 5).map((m, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
-                  <span className="text-secondary">{formatShortDate(m.date)}</span>
-                  <span className="font-bold flex items-center gap-2">
-                    {m.heart_rate} bpm
-                    <span className="badge text-[10px]" style={m.heart_rate < 70 ? { background: 'var(--success)', color: 'white' } : m.heart_rate < 85 ? { background: 'var(--warning)', color: 'white' } : { background: 'var(--danger)', color: 'white' }}>
-                      {m.heart_rate < 70 ? 'Resting' : m.heart_rate < 85 ? 'Normal' : 'Elevated'}
-                    </span>
-                    <button
-                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
-                      onClick={() => handleDelete(m.date, 'heart_rate')}
-                      disabled={deletingId === `${m.date}-heart_rate`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </div>
-              ))}
+        {expandedCard === 'steps' && (
+          <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <div className="flex gap-2 mt-4">
+              <input type="number" className="input flex-1" placeholder="Steps (e.g. 10000)" value={stepsInput} onChange={e => setStepsInput(e.target.value)} />
+              <button className="btn btn-primary" onClick={() => handleSave('steps')} disabled={saving || !stepsInput}>
+                {saving ? '...' : <Save size={18} />}
+              </button>
             </div>
-          )}
-          {recentMetrics.filter(m => m.heart_rate).length > 5 && (
-            <button
-              className="text-xs text-accent-primary mt-2 hover:underline"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => setShowMoreHR(!showMoreHR)}
-            >
-              {showMoreHR ? 'Show less' : `Show more (${recentMetrics.filter(m => m.heart_rate).length} total)`}
-            </button>
-          )}
-        </div>
+            {savedFields.steps && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
+            {renderHistory(recentMetrics, 'steps',
+              m => m.steps.toLocaleString(),
+              m => <span className="badge text-[10px]" style={m.steps >= goals.steps ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.steps >= goals.steps ? 'Active' : 'Low'}</span>
+            )}
+          </div>
+        )}
       </div>
 
-      {/* Calories Card */}
-      <div className="card glass mx-4 mb-4">
-        <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
-          <Flame className="text-accent-primary" /> Calories Burned
-        </div>
-
-        <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Calories {savedFields.calories_burned && <span style={{ color: 'var(--success)', fontSize: '0.75rem' }}><CheckCircle size={12} style={{ display: 'inline', verticalAlign: 'middle' }} /> Saved</span>}</label>
-          <div className="flex gap-2">
-            <input
-              type="number"
-              className="input flex-1"
-              placeholder="e.g. 2200"
-              value={caloriesInput}
-              onChange={(e) => setCaloriesInput(e.target.value)}
-            />
-            <button
-              className="btn btn-primary"
-              onClick={() => handleSave('calories_burned')}
-              disabled={saving || !caloriesInput}
-            >
-              {saving ? '...' : <Save size={20} />}
-            </button>
+      {/* Weight */}
+      <div className="card glass mx-4 mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggle('weight')} style={{ background: expandedCard === 'weight' ? 'var(--surface-hover)' : 'transparent' }}>
+          <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(59, 130, 246, 0.15)' }}>
+            <Scale size={18} style={{ color: '#3b82f6' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm">Weight</div>
+            <div className="text-xs text-muted">7d avg: {weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-white">{todayMetrics.weight ? `${todayMetrics.weight}${goals.weightUnit}` : '—'}</div>
+            {goals.weight && todayMetrics.weight && (
+              <span className="text-[10px]" style={{ color: Math.abs(todayMetrics.weight - goals.weight) < 1 ? 'var(--success)' : 'var(--warning)' }}>
+                {Math.abs(todayMetrics.weight - goals.weight) < 1 ? 'On target' : `${todayMetrics.weight > goals.weight ? '+' : ''}${(todayMetrics.weight - goals.weight).toFixed(1)}`}
+              </span>
+            )}
           </div>
         </div>
-
-        <div className="mt-6 border-t pt-4" style={{ borderColor: 'var(--surface-border)' }}>
-          <h4 className="text-sm font-bold mb-3">Recent History</h4>
-          {recentMetrics.filter(m => m.calories_burned).length === 0 ? (
-            <p className="text-xs text-muted">No calorie data recorded yet.</p>
-          ) : (
-            <div className="flex-col gap-2 relative">
-              {recentMetrics.filter(m => m.calories_burned).slice(0, showMoreCal ? 10 : 5).map((m, idx) => (
-                <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
-                  <span className="text-secondary">{formatShortDate(m.date)}</span>
-                  <span className="font-bold flex items-center gap-2">
-                    {m.calories_burned.toLocaleString()} kcal
-                    <button
-                      className="p-1 ml-2 text-muted hover:text-warning transition-colors"
-                      onClick={() => handleDelete(m.date, 'calories_burned')}
-                      disabled={deletingId === `${m.date}-calories_burned`}
-                    >
-                      <Trash2 size={14} />
-                    </button>
-                  </span>
-                </div>
-              ))}
+        {expandedCard === 'weight' && (
+          <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <div className="flex gap-2 mt-4">
+              <input type="number" step="0.1" className="input flex-1" placeholder={`Weight (${goals.weightUnit})`} value={weightInput} onChange={e => setWeightInput(e.target.value)} />
+              <button className="btn btn-primary" onClick={() => handleSave('weight')} disabled={saving || !weightInput}>
+                {saving ? '...' : <Save size={18} />}
+              </button>
             </div>
-          )}
-          {recentMetrics.filter(m => m.calories_burned).length > 5 && (
-            <button
-              className="text-xs text-accent-primary mt-2 hover:underline"
-              style={{ background: 'none', border: 'none', cursor: 'pointer' }}
-              onClick={() => setShowMoreCal(!showMoreCal)}
-            >
-              {showMoreCal ? 'Show less' : `Show more (${recentMetrics.filter(m => m.calories_burned).length} total)`}
-            </button>
-          )}
-        </div>
+            {savedFields.weight && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
+
+            {weightHistoryData.length > 1 && (
+              <div style={{ height: '180px', width: '100%', marginTop: '16px' }}>
+                <ResponsiveContainer width="100%" height="100%">
+                  <LineChart data={weightHistoryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                    <defs>
+                      <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                        <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
+                        <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                      </linearGradient>
+                    </defs>
+                    <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
+                    <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
+                    <YAxis domain={['dataMin - 0.5', 'dataMax + 0.5']} stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${Number(v).toFixed(1)}`} width={45} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', fontSize: '13px', padding: '8px 12px' }} formatter={v => [`${v} ${goals.weightUnit}`, 'Weight']} />
+                    <Line type="monotone" dataKey="weight" stroke="var(--accent-primary)" strokeWidth={2.5} dot={{ fill: 'var(--accent-primary)', stroke: 'var(--surface-color)', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} fill="url(#weightGradient)" />
+                    {goals.weight && <Line type="monotone" dataKey={() => goals.weight} stroke="var(--success)" strokeDasharray="5 5" strokeWidth={1.5} dot={false} name="Goal" />}
+                  </LineChart>
+                </ResponsiveContainer>
+              </div>
+            )}
+            {renderHistory(recentMetrics, 'weight', m => `${m.weight} ${m.weight_unit || goals.weightUnit}`, null)}
+          </div>
+        )}
       </div>
 
-      {/* Save All Button */}
-      {(sleepInput || stepsInput || weightInput || heartRateInput || caloriesInput) && (
-        <div className="mx-4 mb-6">
-          <button className="btn btn-primary btn-block text-sm" onClick={handleSaveAll} disabled={saving}>
-            <Save size={16} /> {saving ? 'Saving...' : 'Save All Metrics'}
-          </button>
+      {/* Heart Rate */}
+      <div className="card glass mx-4 mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggle('hr')} style={{ background: expandedCard === 'hr' ? 'var(--surface-hover)' : 'transparent' }}>
+          <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(239, 68, 68, 0.15)' }}>
+            <Heart size={18} style={{ color: '#ef4444' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm">Heart Rate</div>
+            <div className="text-xs text-muted">7d avg: {hrAvg7 > 0 ? `${hrAvg7}bpm` : '--'}</div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-white">{todayMetrics.heart_rate ? `${todayMetrics.heart_rate}` : '—'}<span className="text-xs text-muted font-normal">{todayMetrics.heart_rate ? ' bpm' : ''}</span></div>
+            {todayMetrics.heart_rate && (
+              <span className="text-[10px]" style={{ color: todayMetrics.heart_rate < 70 ? 'var(--success)' : todayMetrics.heart_rate < 85 ? 'var(--warning)' : 'var(--danger)' }}>
+                {todayMetrics.heart_rate < 70 ? 'Resting' : todayMetrics.heart_rate < 85 ? 'Normal' : 'Elevated'}
+              </span>
+            )}
+          </div>
         </div>
-      )}
+        {expandedCard === 'hr' && (
+          <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <div className="flex gap-2 mt-4">
+              <input type="number" className="input flex-1" placeholder="BPM (e.g. 65)" value={heartRateInput} onChange={e => setHeartRateInput(e.target.value)} />
+              <button className="btn btn-primary" onClick={() => handleSave('heart_rate')} disabled={saving || !heartRateInput}>
+                {saving ? '...' : <Save size={18} />}
+              </button>
+            </div>
+            {savedFields.heart_rate && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
+            {renderHistory(recentMetrics, 'heart_rate',
+              m => `${m.heart_rate} bpm`,
+              m => <span className="badge text-[10px]" style={m.heart_rate < 70 ? { background: 'var(--success)', color: 'white' } : m.heart_rate < 85 ? { background: 'var(--warning)', color: 'white' } : { background: 'var(--danger)', color: 'white' }}>{m.heart_rate < 70 ? 'Resting' : m.heart_rate < 85 ? 'Normal' : 'Elevated'}</span>
+            )}
+          </div>
+        )}
+      </div>
+
+      {/* Calories */}
+      <div className="card glass mx-4 mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+        <div className="flex items-center gap-3 p-4 cursor-pointer" onClick={() => toggle('calories')} style={{ background: expandedCard === 'calories' ? 'var(--surface-hover)' : 'transparent' }}>
+          <div className="flex items-center justify-center" style={{ width: 36, height: 36, borderRadius: 10, background: 'rgba(245, 158, 11, 0.15)' }}>
+            <Flame size={18} style={{ color: '#f59e0b' }} />
+          </div>
+          <div className="flex-1 min-w-0">
+            <div className="font-bold text-sm">Calories</div>
+            <div className="text-xs text-muted">7d avg: {calAvg7 > 0 ? calAvg7.toLocaleString() : '--'}</div>
+          </div>
+          <div className="text-right">
+            <div className="font-bold text-white">{todayMetrics.calories_burned ? todayMetrics.calories_burned.toLocaleString() : '—'}<span className="text-xs text-muted font-normal">{todayMetrics.calories_burned ? ' kcal' : ''}</span></div>
+          </div>
+        </div>
+        {expandedCard === 'calories' && (
+          <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <div className="flex gap-2 mt-4">
+              <input type="number" className="input flex-1" placeholder="Calories (e.g. 2200)" value={caloriesInput} onChange={e => setCaloriesInput(e.target.value)} />
+              <button className="btn btn-primary" onClick={() => handleSave('calories_burned')} disabled={saving || !caloriesInput}>
+                {saving ? '...' : <Save size={18} />}
+              </button>
+            </div>
+            {savedFields.calories_burned && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
+            {renderHistory(recentMetrics, 'calories_burned', m => `${m.calories_burned.toLocaleString()} kcal`, null)}
+          </div>
+        )}
+      </div>
 
     </div>
   );
