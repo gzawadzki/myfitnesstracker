@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo } from 'react';
-import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef } from 'react';
+import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X, Clock } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
@@ -14,6 +14,8 @@ export default function NewWorkout() {
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
   const [setsData, setSetsData] = useState({});
   const [workoutComment, setWorkoutComment] = useState("");
+  const workoutStartTime = useRef(Date.now());
+  const [elapsedSeconds, setElapsedSeconds] = useState(0);
 
   // Parse workout ID from URL or default to first
   const queryParams = new URLSearchParams(location.search);
@@ -45,6 +47,14 @@ export default function NewWorkout() {
       setExerciseOrder(baseExercises.map(ex => ex.id));
     }
   }, [baseExercises]);
+
+  // Workout elapsed timer
+  useEffect(() => {
+    const timer = setInterval(() => {
+      setElapsedSeconds(Math.floor((Date.now() - workoutStartTime.current) / 1000));
+    }, 1000);
+    return () => clearInterval(timer);
+  }, []);
 
   // Build the active exercise list using order + skips + swaps
   const exercises = useMemo(() => {
@@ -230,7 +240,7 @@ export default function NewWorkout() {
           finalSetsData[ex.id] = sets;
         }
       }
-      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null);
+      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null, Math.round(elapsedSeconds / 60));
       toast.success('Workout saved!');
       navigate('/');
     } catch (err) {
@@ -254,6 +264,11 @@ export default function NewWorkout() {
         <div className="text-center">
           <div className="text-xs text-secondary">{phase?.name}</div>
           <div className="font-bold">{currentWorkout.name}</div>
+          <div className="flex items-center justify-center gap-1 text-xs text-muted mt-1">
+            <Clock size={12} />
+            {Math.floor(elapsedSeconds / 3600) > 0 && `${Math.floor(elapsedSeconds / 3600)}:`}
+            {String(Math.floor((elapsedSeconds % 3600) / 60)).padStart(2, '0')}:{String(elapsedSeconds % 60).padStart(2, '0')}
+          </div>
         </div>
         <button className="btn btn-secondary text-sm" style={{ padding: '6px 12px' }} onClick={() => {
           if (!hasData || window.confirm('Discard this workout?')) navigate('/');

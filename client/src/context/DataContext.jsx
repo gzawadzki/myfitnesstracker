@@ -140,14 +140,17 @@ export function DataProvider({ children }) {
     };
   }, []);
 
-  const saveWorkoutSession = async (templateId, setsData, notes, sleep, steps) => {
+  const saveWorkoutSession = async (templateId, setsData, notes, sleep, steps, durationMinutes) => {
     // Insert session
-    const { data: sessionData, error: sessErr } = await supabase.from('workout_sessions').insert([{
+    const insertPayload = {
       template_id: templateId,
       notes: notes,
       health_sleep_hours: sleep,
       health_steps: steps
-    }]).select().single();
+    };
+    if (durationMinutes) insertPayload.duration_minutes = durationMinutes;
+
+    const { data: sessionData, error: sessErr } = await supabase.from('workout_sessions').insert([insertPayload]).select().single();
 
     if (sessErr) throw sessErr;
 

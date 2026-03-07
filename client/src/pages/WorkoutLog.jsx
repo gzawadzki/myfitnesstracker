@@ -55,7 +55,10 @@ export default function WorkoutLog() {
                 >
                   <div>
                     <h3 className="h3 mb-1 text-sm">{templateName}</h3>
-                    <p className="text-xs text-muted">{formatShortDate(session.created_at)}</p>
+                    <p className="text-xs text-muted">
+                      {formatShortDate(session.created_at)}
+                      {session.duration_minutes > 0 && <span className="ml-2">⏱ {session.duration_minutes} min</span>}
+                    </p>
                   </div>
                   <div className="flex items-center gap-2">
                     {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
