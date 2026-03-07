@@ -1,11 +1,60 @@
-import React from 'react';
+import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { User, HeartPulse, LogOut, Database } from 'lucide-react';
+import { User, HeartPulse, LogOut, Database, Download } from 'lucide-react';
 import { usePreferences } from '../hooks/usePreferences';
+import { useData } from '../context/DataContext';
 import { supabase } from '../lib/supabase';
 
 export default function ProfilePage({ session, injectMockData }) {
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
+  const { db } = useData();
+  const [downloading, setDownloading] = useState(false);
+
+  const downloadAllData = () => {
+    if (!db) return;
+    setDownloading(true);
+    try {
+      const esc = (v) => {
+        const s = String(v ?? '');
+        return s.includes(',') || s.includes('"') || s.includes('\n') ? `"${s.replace(/"/g, '""')}"` : s;
+      };
+      const lines = [];
+
+      // — Workout Sessions —
+      lines.push('WORKOUT SESSIONS');
+      lines.push(['Date', 'Workout', 'Exercise', 'Set', 'Weight (kg)', 'Reps', 'Completed', 'Notes'].join(','));
+      (db.sessions || []).forEach(sess => {
+        const tmpl = db.workouts?.find(w => w.id === sess.template_id);
+        const date = sess.created_at ? new Date(sess.created_at).toLocaleDateString() : '';
+        (sess.sets || []).forEach(set => {
+          const exName = db.exercises[set.exercise_id]?.name || set.exercise_id;
+          lines.push([date, esc(tmpl?.name || sess.template_id), esc(exName), set.set_number, set.weight, set.reps, set.completed ? 'Yes' : 'No', esc(sess.notes || '')].join(','));
+        });
+      });
+
+      lines.push('');
+
+      // — Health Metrics —
+      lines.push('HEALTH METRICS');
+      lines.push(['Date', 'Sleep (h)', 'Steps', 'Weight', 'Heart Rate', 'Calories Burned'].join(','));
+      (db.healthMetrics || []).forEach(h => {
+        lines.push([h.date, h.sleep_hours ?? '', h.steps ?? '', h.weight ?? '', h.heart_rate ?? '', h.calories_burned ?? ''].join(','));
+      });
+
+      const csv = lines.join('\n');
+      const blob = new Blob([csv], { type: 'text/csv;charset=utf-8;' });
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = `fitnotes-export-${new Date().toISOString().slice(0, 10)}.csv`;
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      URL.revokeObjectURL(url);
+    } finally {
+      setDownloading(false);
+    }
+  };
   const user = session?.user;
   const email = user?.email || '';
   const initials = email
@@ -103,6 +152,18 @@ export default function ProfilePage({ session, injectMockData }) {
           </div>
         </div>
       )}
+
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <Download size={14} /> Export
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-muted mb-3">Download all your workout sessions, health metrics, and exercise data as a CSV file.</p>
+          <button className="btn w-full btn-secondary text-sm flex items-center justify-center gap-2" onClick={downloadAllData} disabled={downloading || !db}>
+            <Download size={16} /> {downloading ? 'Preparing…' : 'Download CSV'}
+          </button>
+        </div>
+      </div>
 
       <button
         className="btn w-full flex justify-center items-center gap-2 mt-2"
