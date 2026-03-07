@@ -33,7 +33,9 @@ export function DataProvider({ children }) {
         if (setsErr) throw setsErr;
 
         const { data: healthData, error: healthErr } = await supabase.from('health_metrics').select('*').order('date', { ascending: false });
-        if (healthErr && healthErr.code !== '42P01') throw healthErr; // Ignore table not found error initially until user runs the SQL
+        if (healthErr && !healthErr.message?.includes('schema cache') && healthErr.code !== '42P01') {
+          throw healthErr; 
+        }
 
         // Reconstruct the `db` structure to match what the UI expects
         const mappedDb = {
