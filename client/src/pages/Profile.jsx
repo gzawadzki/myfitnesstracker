@@ -1,14 +1,17 @@
 import React, { useState } from 'react';
-import { Link } from 'react-router-dom';
-import { User, HeartPulse, LogOut, Database, Download } from 'lucide-react';
+import { User, HeartPulse, LogOut, Database, Download, X } from 'lucide-react';
 import { usePreferences } from '../hooks/usePreferences';
 import { useData } from '../context/DataContext';
 import { supabase } from '../lib/supabase';
+import GoalsForm from '../components/GoalsForm';
+import { formatWeightGoal, hasIncompleteGoals } from '../components/goalsUtils';
 
 export default function ProfilePage({ session, injectMockData }) {
-  const { preferences: prefs, loading: prefsLoading } = usePreferences();
+  const { preferences: prefs, loading: prefsLoading, savePreferences } = usePreferences();
   const { db } = useData();
   const [downloading, setDownloading] = useState(false);
+  const [savingGoals, setSavingGoals] = useState(false);
+  const [showGoalsModal, setShowGoalsModal] = useState(false);
 
   const downloadAllData = () => {
     if (!db) return;
@@ -55,6 +58,17 @@ export default function ProfilePage({ session, injectMockData }) {
       setDownloading(false);
     }
   };
+
+  const handleSaveGoals = async (updates) => {
+    try {
+      setSavingGoals(true);
+      await savePreferences(updates);
+      setShowGoalsModal(false);
+    } finally {
+      setSavingGoals(false);
+    }
+  };
+
   const user = session?.user;
   const email = user?.email || '';
   const initials = email
@@ -105,7 +119,6 @@ export default function ProfilePage({ session, injectMockData }) {
             <span className="text-muted">Member Since</span>
             <span className="font-medium">{memberSince}</span>
           </div>
-
         </div>
       </div>
 
@@ -130,14 +143,39 @@ export default function ProfilePage({ session, injectMockData }) {
             </div>
             <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
               <div className="text-xs text-muted mb-1">Weight</div>
-              <div className="text-lg font-bold text-white">{prefs?.weight_goal ?? '—'}{prefs?.weight_goal ? (prefs?.weight_goal_unit || 'kg') : ''}</div>
+              <div className="text-lg font-bold text-white">{formatWeightGoal(prefs?.weight_goal, prefs?.weight_goal_unit || 'kg')}</div>
             </div>
           </div>
         )}
         <div className="px-4 pb-4">
-          <Link to="/health" className="text-xs text-accent-primary hover:underline">Edit goals in Health tab →</Link>
+          <button
+            className="btn btn-secondary w-full text-sm"
+            onClick={() => setShowGoalsModal(true)}
+            disabled={prefsLoading}
+          >
+            {hasIncompleteGoals(prefs) ? 'Complete your goals' : 'Edit goals'}
+          </button>
         </div>
       </div>
+
+      {showGoalsModal && (
+        <div className="fixed inset-0 z-50 flex items-center justify-center p-4" style={{ background: 'rgba(0, 0, 0, 0.6)' }}>
+          <div className="w-full max-w-md rounded-xl border p-4" style={{ background: 'var(--surface-color)', borderColor: 'var(--surface-border)' }}>
+            <div className="flex items-center justify-between mb-3">
+              <h3 className="font-bold text-white">Edit Goals</h3>
+              <button className="btn-icon" onClick={() => setShowGoalsModal(false)} aria-label="Close goals modal">
+                <X size={16} />
+              </button>
+            </div>
+            <GoalsForm
+              preferences={prefs}
+              onSave={handleSaveGoals}
+              saving={savingGoals}
+              showOnboardingCopy={hasIncompleteGoals(prefs)}
+            />
+          </div>
+        </div>
+      )}
 
       {injectMockData && (
         <div style={cardStyle} className="mb-4">

@@ -4,131 +4,183 @@ import { supabase } from '../lib/supabase';
 
 const DataContext = createContext(null);
 
+const createEmptyDb = () => ({
+  sessions: [],
+  healthMetrics: [],
+  phases: [],
+  workouts: [],
+  exercises: {}
+});
+
 export function DataProvider({ children }) {
-  const [db, setDb] = useState(null);
+  const [db, setDb] = useState(createEmptyDb);
   const [loading, setLoading] = useState(true);
+  const [appReady, setAppReady] = useState(false);
+  const [loadingCatalog, setLoadingCatalog] = useState(true);
+  const [loadingSessions, setLoadingSessions] = useState(true);
+  const [loadingHealth, setLoadingHealth] = useState(true);
   const [error, setError] = useState(null);
 
   useEffect(() => {
     let isMounted = true;
     let focusDebounce = null;
 
+    async function fetchCatalogData() {
+      const { data: phasesData, error: phErr } = await supabase.from('phases').select('*').order('order_index');
+      if (phErr) throw phErr;
+
+      const { data: workoutsData, error: wErr } = await supabase.from('workout_templates').select('*');
+      if (wErr) throw wErr;
+
+      const { data: exercisesData, error: eErr } = await supabase.from('exercises').select('*');
+      if (eErr) throw eErr;
+
+      const { data: mappingsData, error: mErr } = await supabase.from('template_exercises').select('*').order('order_index');
+      if (mErr) throw mErr;
+
+      return { phasesData, workoutsData, exercisesData, mappingsData };
+    }
+
+    async function fetchWorkoutSessions(userId) {
+      const { data: latestSessionsData, error: sessErr } = await supabase
+        .from('workout_sessions')
+        .select('*')
+        .eq('user_id', userId)
+        .order('created_at', { ascending: false })
+        .limit(100);
+      if (sessErr) throw sessErr;
+
+      const sessionIds = latestSessionsData.map(s => s.id);
+      let loggedSetsData = [];
+      if (sessionIds.length > 0) {
+        const { data: setsData, error: setsErr } = await supabase
+          .from('logged_sets')
+          .select('*')
+          .in('session_id', sessionIds)
+          .order('created_at');
+        if (setsErr) throw setsErr;
+        loggedSetsData = setsData || [];
+      }
+
+      return { latestSessionsData, loggedSetsData };
+    }
+
+    async function fetchHealthMetrics(userId) {
+      const { data: healthData, error: healthErr } = await supabase
+        .from('health_metrics')
+        .select('*')
+        .eq('user_id', userId)
+        .order('date', { ascending: false });
+      if (healthErr && !healthErr.message?.includes('schema cache') && healthErr.code !== '42P01') {
+        throw healthErr;
+      }
+      return healthData || [];
+    }
+
+    function buildMappedDb(catalog, sessions, healthMetrics) {
+      const { phasesData, workoutsData, exercisesData, mappingsData } = catalog;
+      const { latestSessionsData, loggedSetsData } = sessions;
+
+      const mappedDb = {
+        sessions: latestSessionsData.map(session => ({
+          ...session,
+          sets: loggedSetsData.filter(set => set.session_id === session.id)
+        })),
+        healthMetrics,
+        phases: phasesData,
+        workouts: workoutsData.map(w => ({
+          ...w,
+          phaseId: w.phase_id,
+          exercises: mappingsData.filter(m => m.workout_id === w.id).map(m => {
+            const relevantSessions = latestSessionsData.filter(s => s.template_id === w.id);
+            const history = [];
+            if (relevantSessions.length > 0) {
+              const lastSessionId = relevantSessions[0].id;
+              const lastSessionSets = loggedSetsData.filter(set => set.session_id === lastSessionId && set.exercise_id === m.exercise_id);
+              lastSessionSets.forEach(set => {
+                history.push({ reps: set.reps, weight: set.weight });
+              });
+            }
+            return {
+              exerciseId: m.exercise_id,
+              targetSets: m.target_sets,
+              targetReps: m.target_reps,
+              history
+            };
+          })
+        })),
+        exercises: exercisesData.reduce((acc, ex) => {
+          acc[ex.id] = { id: ex.id, name: ex.name };
+          return acc;
+        }, {})
+      };
+
+      latestSessionsData.reverse().forEach((sess) => {
+        const sessSets = loggedSetsData.filter(s => s.session_id === sess.id);
+        const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
+
+        exIdsInSession.forEach(exId => {
+          const exSets = sessSets.filter(s => s.exercise_id === exId);
+          const maxWeight = Math.max(...exSets.map(s => Number(s.weight)));
+          const avgReps = Math.round(exSets.reduce((sum, s) => sum + Number(s.reps), 0) / exSets.length);
+
+          if (!mappedDb.exercises[exId]) return;
+          if (!mappedDb.exercises[exId].history) mappedDb.exercises[exId].history = [];
+
+          if (maxWeight > 0) {
+            mappedDb.exercises[exId].history.push({
+              date: sess.created_at,
+              weight: maxWeight,
+              reps: avgReps
+            });
+          }
+        });
+      });
+
+      return mappedDb;
+    }
+
     async function loadData(isBackground = false) {
       try {
-        // Only show loading skeleton on initial load, not background refetches.
-        // Setting loading=true on refetch unmounts all components, resetting
-        // their local state (timers, form inputs, etc.)
-        if (isMounted && !isBackground) setLoading(true);
+        if (isMounted && !isBackground) {
+          setError(null);
+          setLoading(true);
+          setLoadingCatalog(true);
+          setLoadingSessions(true);
+          setLoadingHealth(true);
+        }
 
         // Get current user for filtering user-specific tables
         const { data: userData } = await supabase.auth.getUser();
         const userId = userData?.user?.id;
         if (!userId) throw new Error("Not logged in");
 
-        const { data: phasesData, error: phErr } = await supabase.from('phases').select('*').order('order_index');
-        if (phErr) throw phErr;
-
-        const { data: workoutsData, error: wErr } = await supabase.from('workout_templates').select('*');
-        if (wErr) throw wErr;
-
-        const { data: exercisesData, error: eErr } = await supabase.from('exercises').select('*');
-        if (eErr) throw eErr;
-
-        const { data: mappingsData, error: mErr } = await supabase.from('template_exercises').select('*').order('order_index');
-        if (mErr) throw mErr;
-
-        const { data: latestSessionsData, error: sessErr } = await supabase
-          .from('workout_sessions')
-          .select('*')
-          .eq('user_id', userId)
-          .order('created_at', { ascending: false })
-          .limit(100);
-        if (sessErr) throw sessErr;
-
-        const sessionIds = latestSessionsData.map(s => s.id);
-        let loggedSetsData = [];
-        if (sessionIds.length > 0) {
-          const { data: setsData, error: setsErr } = await supabase
-            .from('logged_sets')
-            .select('*')
-            .in('session_id', sessionIds)
-            .order('created_at');
-          if (setsErr) throw setsErr;
-          loggedSetsData = setsData || [];
-        }
-
-        const { data: healthData, error: healthErr } = await supabase
-          .from('health_metrics')
-          .select('*')
-          .eq('user_id', userId)
-          .order('date', { ascending: false });
-        if (healthErr && !healthErr.message?.includes('schema cache') && healthErr.code !== '42P01') {
-          throw healthErr; 
-        }
-
-        // Reconstruct the `db` structure to match what the UI expects
-        const mappedDb = {
-          sessions: latestSessionsData.map(session => ({
-            ...session,
-            sets: loggedSetsData.filter(set => set.session_id === session.id)
-          })),
-          healthMetrics: healthData || [],
-          phases: phasesData,
-          workouts: workoutsData.map(w => ({
-            ...w,
-            phaseId: w.phase_id,
-            exercises: mappingsData.filter(m => m.workout_id === w.id).map(m => {
-              const relevantSessions = latestSessionsData.filter(s => s.template_id === w.id);
-              const history = [];
-              if (relevantSessions.length > 0) {
-                const lastSessionId = relevantSessions[0].id;
-                const lastSessionSets = loggedSetsData.filter(set => set.session_id === lastSessionId && set.exercise_id === m.exercise_id);
-                lastSessionSets.forEach(set => {
-                  history.push({ reps: set.reps, weight: set.weight });
-                });
-              }
-              return {
-                exerciseId: m.exercise_id,
-                targetSets: m.target_sets,
-                targetReps: m.target_reps,
-                history: history
-              };
-            })
-          })),
-          exercises: exercisesData.reduce((acc, ex) => {
-            acc[ex.id] = { id: ex.id, name: ex.name };
-            return acc;
-          }, {})
-        };
-
-        // Inject the full history across all sessions for the Progress Chart
-        latestSessionsData.reverse().forEach((sess) => {
-          const sessSets = loggedSetsData.filter(s => s.session_id === sess.id);
-          const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
-          
-          exIdsInSession.forEach(exId => {
-            const exSets = sessSets.filter(s => s.exercise_id === exId);
-            const maxWeight = Math.max(...exSets.map(s => Number(s.weight)));
-            const avgReps = Math.round(exSets.reduce((sum, s) => sum + Number(s.reps), 0) / exSets.length);
-            
-            if(!mappedDb.exercises[exId].history) mappedDb.exercises[exId].history = [];
-            
-            if (maxWeight > 0) {
-              mappedDb.exercises[exId].history.push({
-                date: sess.created_at,
-                weight: maxWeight,
-                reps: avgReps
-              });
-            }
-          });
+        const catalogPromise = fetchCatalogData().finally(() => {
+          if (isMounted) setLoadingCatalog(false);
+        });
+        const sessionsPromise = fetchWorkoutSessions(userId).finally(() => {
+          if (isMounted) setLoadingSessions(false);
+        });
+        const healthPromise = fetchHealthMetrics(userId).finally(() => {
+          if (isMounted) setLoadingHealth(false);
         });
 
-        if (isMounted) setDb(mappedDb);
+        const [catalog, sessions, healthMetrics] = await Promise.all([catalogPromise, sessionsPromise, healthPromise]);
+
+        const mappedDb = buildMappedDb(catalog, sessions, healthMetrics);
+
+        if (isMounted) {
+          setError(null);
+          setDb(mappedDb);
+        }
       } catch (err) {
         console.error("Error loading Supabase data:", err);
         if (isMounted) setError(err.message);
       } finally {
-        if (isMounted) setLoading(false);
+        if (isMounted) {
+          setLoading(false);
+          setAppReady(true);
+        }
       }
     }
 
@@ -319,7 +371,7 @@ export function DataProvider({ children }) {
   };
 
   return (
-    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric, createExercise }}>
+    <DataContext.Provider value={{ db, loading, appReady, loadingCatalog, loadingSessions, loadingHealth, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric, createExercise }}>
       {children}
     </DataContext.Provider>
   );

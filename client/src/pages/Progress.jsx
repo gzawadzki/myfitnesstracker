@@ -4,6 +4,7 @@ import { useNavigate, useSearchParams } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
+import ExercisePicker from '../components/ExercisePicker';
 
 const RANGE_OPTIONS = [
   { key: '30d', label: '30D', days: 30 },
@@ -12,7 +13,7 @@ const RANGE_OPTIONS = [
 ];
 
 export default function Progress() {
-  const { db } = useData();
+  const { db, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs } = usePreferences();
   const navigate = useNavigate();
   const [searchParams, setSearchParams] = useSearchParams();
@@ -85,12 +86,9 @@ export default function Progress() {
     };
   };
 
-  const { chartRows: chartData, totalHistoryCount, filteredHistoryCount } = buildChartData(resolvedExerciseId, selectedRange);
-  const selectedEx = db.exercises[resolvedExerciseId];
+  const chartData = buildChartData(selectedExUrlId);
+  const selectedEx = db.exercises[selectedExUrlId];
   const exerciseOptions = Object.values(db.exercises || {}).sort((a, b) => a.name.localeCompare(b.name));
-  const isTruncated = selectedRange !== 'all' && filteredHistoryCount < totalHistoryCount;
-  const selectedRangeLabel = RANGE_OPTIONS.find(option => option.key === selectedRange)?.label || '30D';
-  const truncatedSessionsLabel = selectedRange === 'all' ? '' : selectedRangeLabel.replace(/d/i, '');
 
   // 1. Calculate Real Metric Cards Data
   const totalWorkouts = db.sessions ? db.sessions.length : 0;
@@ -134,6 +132,16 @@ export default function Progress() {
     diffPercent = Math.round(((wellRestedVol - tiredVol) / tiredVol) * 100);
   }
 
+  if (loadingCatalog || loadingSessions || loadingHealth) {
+    return (
+      <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
+        <h1 className="h2 mb-4">Analytics</h1>
+        <div className="card glass animate-pulse mb-4" style={{ height: '80px' }}></div>
+        <div className="card glass animate-pulse" style={{ height: '300px' }}></div>
+      </div>
+    );
+  }
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
       <header className="flex justify-between items-center mb-6">
@@ -163,15 +171,12 @@ export default function Progress() {
       <h2 className="h3 mb-4">Exercise Progress</h2>
       
       <div className="mb-4 flex items-center justify-between gap-2">
-        <select 
-          className="text-sm font-medium flex-1" 
-          value={resolvedExerciseId || ''}
-          onChange={e => setSelectedExUrlId(e.target.value)}
-        >
-          {exerciseOptions.map(ex => (
-            <option key={ex.id} value={ex.id}>{ex.name}</option>
-          ))}
-        </select>
+        <ExercisePicker
+          exercises={exerciseOptions}
+          selectedExerciseId={selectedExUrlId}
+          onSelect={setSelectedExUrlId}
+          title="Choose exercise"
+        />
         
         <div className="flex rounded-md p-1" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
           <button 
