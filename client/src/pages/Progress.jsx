@@ -87,6 +87,7 @@ export default function Progress() {
 
   const { chartRows: chartData, totalHistoryCount, filteredHistoryCount } = buildChartData(resolvedExerciseId, selectedRange);
   const selectedEx = db.exercises[resolvedExerciseId];
+  const exerciseOptions = Object.values(db.exercises || {}).sort((a, b) => a.name.localeCompare(b.name));
   const isTruncated = selectedRange !== 'all' && filteredHistoryCount < totalHistoryCount;
   const selectedRangeLabel = RANGE_OPTIONS.find(option => option.key === selectedRange)?.label || '30D';
   const truncatedSessionsLabel = selectedRange === 'all' ? '' : selectedRangeLabel.replace(/d/i, '');
@@ -167,7 +168,7 @@ export default function Progress() {
           value={resolvedExerciseId || ''}
           onChange={e => setSelectedExUrlId(e.target.value)}
         >
-          {Object.values(db.exercises).map(ex => (
+          {exerciseOptions.map(ex => (
             <option key={ex.id} value={ex.id}>{ex.name}</option>
           ))}
         </select>
