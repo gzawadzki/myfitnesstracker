@@ -14,8 +14,20 @@ export default function NewWorkout() {
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
   const [setsData, setSetsData] = useState({});
   const [workoutComment, setWorkoutComment] = useState("");
-  const workoutStartTime = useRef(Date.now());
-  const [elapsedSeconds, setElapsedSeconds] = useState(0);
+  const workoutStartTime = useRef(() => {
+    const stored = sessionStorage.getItem('workoutStartTime');
+    if (stored) return parseInt(stored);
+    const now = Date.now();
+    sessionStorage.setItem('workoutStartTime', now);
+    return now;
+  });
+  // Initialize the ref value (lazy init)
+  if (typeof workoutStartTime.current === 'function') {
+    workoutStartTime.current = workoutStartTime.current();
+  }
+  const [elapsedSeconds, setElapsedSeconds] = useState(
+    () => Math.floor((Date.now() - (parseInt(sessionStorage.getItem('workoutStartTime')) || Date.now())) / 1000)
+  );
 
   // Parse workout ID from URL or default to first
   const queryParams = new URLSearchParams(location.search);
@@ -54,6 +66,11 @@ export default function NewWorkout() {
       setElapsedSeconds(Math.floor((Date.now() - workoutStartTime.current) / 1000));
     }, 1000);
     return () => clearInterval(timer);
+  }, []);
+
+  // Clear sessionStorage when leaving the workout page
+  useEffect(() => {
+    return () => sessionStorage.removeItem('workoutStartTime');
   }, []);
 
   // Build the active exercise list using order + skips + swaps
