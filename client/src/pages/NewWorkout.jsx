@@ -1,7 +1,7 @@
 /* eslint-disable react-hooks/exhaustive-deps */
 /* eslint-disable react-hooks/set-state-in-effect */
-import { useState, useEffect, useMemo, useRef } from 'react';
-import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X, Clock } from 'lucide-react';
+import { useState, useEffect, useMemo, useRef, useCallback } from 'react';
+import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, RefreshCw, Search, X, Clock, MessageSquare } from 'lucide-react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
@@ -12,8 +12,12 @@ export default function NewWorkout() {
   const navigate = useNavigate();
   const location = useLocation();
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
-  const [setsData, setSetsData] = useState({});
-  const [workoutComment, setWorkoutComment] = useState("");
+  const [setsData, setSetsData] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('workoutSetsData')) || {}; } catch { return {}; }
+  });
+  const [exerciseComments, setExerciseComments] = useState(() => {
+    try { return JSON.parse(sessionStorage.getItem('workoutComments')) || {}; } catch { return {}; }
+  });
   const workoutStartTime = useRef(() => {
     const stored = sessionStorage.getItem('workoutStartTime');
     if (stored) return parseInt(stored);
@@ -68,9 +72,21 @@ export default function NewWorkout() {
     return () => clearInterval(timer);
   }, []);
 
+  // Persist setsData and comments to sessionStorage
+  useEffect(() => {
+    sessionStorage.setItem('workoutSetsData', JSON.stringify(setsData));
+  }, [setsData]);
+  useEffect(() => {
+    sessionStorage.setItem('workoutComments', JSON.stringify(exerciseComments));
+  }, [exerciseComments]);
+
   // Clear sessionStorage when leaving the workout page
   useEffect(() => {
-    return () => sessionStorage.removeItem('workoutStartTime');
+    return () => {
+      sessionStorage.removeItem('workoutStartTime');
+      sessionStorage.removeItem('workoutSetsData');
+      sessionStorage.removeItem('workoutComments');
+    };
   }, []);
 
   // Build the active exercise list using order + skips + swaps
@@ -246,9 +262,13 @@ export default function NewWorkout() {
     }
   };
   
+  const updateComment = useCallback((exId, value) => {
+    setExerciseComments(prev => ({ ...prev, [exId]: value }));
+  }, []);
+
   const finishWorkout = async () => {
     try {
-      // Build setsData that excludes skipped exercises and uses swapped IDs
+      // Build setsData that excludes skipped exercises
       const finalSetsData = {};
       for (const ex of exercises) {
         if (ex.isSkipped) continue;
@@ -257,7 +277,17 @@ export default function NewWorkout() {
           finalSetsData[ex.id] = sets;
         }
       }
-      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null, Math.round(elapsedSeconds / 60));
+      // Combine per-exercise comments into session notes
+      const commentParts = exercises
+        .filter(ex => !ex.isSkipped && exerciseComments[ex.id]?.trim())
+        .map(ex => `${ex.name}: ${exerciseComments[ex.id].trim()}`);
+      const combinedNotes = commentParts.join('\n');
+
+      await saveWorkoutSession(currentWorkout.id, finalSetsData, combinedNotes, null, null, Math.round(elapsedSeconds / 60));
+      // Clear persisted workout state
+      sessionStorage.removeItem('workoutStartTime');
+      sessionStorage.removeItem('workoutSetsData');
+      sessionStorage.removeItem('workoutComments');
       toast.success('Workout saved!');
       navigate('/');
     } catch (err) {
@@ -444,6 +474,20 @@ export default function NewWorkout() {
             })}
           </div>
 
+          {/* Per-exercise comment */}
+          <div className="mt-4 flex items-start gap-2" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-md)', padding: '8px 10px' }}>
+            <MessageSquare size={14} className="text-muted mt-1 flex-shrink-0" />
+            <textarea
+              className="w-full text-sm"
+              style={{ background: 'transparent', border: 'none', outline: 'none', resize: 'none', minHeight: '28px', maxHeight: '80px', padding: 0, lineHeight: 1.4 }}
+              placeholder="Notes for this exercise..."
+              value={exerciseComments[exercise.id] || ''}
+              onChange={e => updateComment(exercise.id, e.target.value)}
+              rows={1}
+              onInput={e => { e.target.style.height = 'auto'; e.target.style.height = e.target.scrollHeight + 'px'; }}
+            />
+          </div>
+
           {/* Action Buttons: Add Set | Skip | Swap */}
           <div className="flex gap-2 mt-4">
             <button className="btn btn-secondary flex-1 flex items-center justify-center gap-1 text-sm" onClick={addSet}>
@@ -537,18 +581,7 @@ export default function NewWorkout() {
         </div>
       )}
 
-      {isLastExercise && (
-        <div className="mb-6">
-          <label className="text-secondary text-sm font-medium mb-2 block">Workout Comments</label>
-          <textarea
-            className="w-full"
-            style={{ width: '100%', minHeight: '80px', resize: 'vertical' }}
-            placeholder="How did this session feel? Note any adjustments for next week."
-            value={workoutComment}
-            onChange={(e) => setWorkoutComment(e.target.value)}
-          ></textarea>
-        </div>
-      )}
+
 
       <button 
         className="btn btn-primary btn-block text-center"
