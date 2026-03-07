@@ -2,7 +2,7 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings } from 'lucide-react';
-import { LineChart, Line, XAxis, YAxis, Tooltip, ResponsiveContainer } from 'recharts';
+import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
 
 function getGoals(preferences) {
   return {
@@ -26,7 +26,7 @@ export default function Health() {
   const todayStr = (new Date(todayRaw - offset)).toISOString().split('T')[0];
 
   const todayMetrics = db.healthMetrics?.find(m => m.date === todayStr) || {};
-  
+
   const [sleepInput, setSleepInput] = useState(todayMetrics.sleep_hours || "");
   const [stepsInput, setStepsInput] = useState(todayMetrics.steps || "");
   const [weightInput, setWeightInput] = useState(todayMetrics.weight || "");
@@ -58,7 +58,7 @@ export default function Health() {
     try {
       setSaving(true);
       setError(null);
-      
+
       let val;
       if (type === 'sleep_hours') {
         val = parseFloat(sleepInput);
@@ -81,7 +81,7 @@ export default function Health() {
       }
 
       await saveDailyHealthMetric(todayStr, type, val);
-      
+
     } catch (err) {
       console.error(err);
       const msg = err?.message || err?.details || 'Failed to save metrics. Check connection.';
@@ -112,11 +112,11 @@ export default function Health() {
 
   const handleDelete = async (dateStr, type) => {
     const typeLabel = type === 'sleep_hours' ? 'sleep' : type === 'steps' ? 'step' : 'weight';
-    if(!window.confirm(`Delete ${typeLabel} record for ${formatShortDate(dateStr)}?`)) return;
+    if (!window.confirm(`Delete ${typeLabel} record for ${formatShortDate(dateStr)}?`)) return;
     try {
       setDeletingId(`${dateStr}-${type}`);
       await deleteDailyHealthMetric(dateStr, type);
-    } catch(err) {
+    } catch (err) {
       console.error(err);
       setError("Failed to delete record.");
     } finally {
@@ -129,15 +129,15 @@ export default function Health() {
     const cutoff = new Date();
     cutoff.setDate(cutoff.getDate() - days);
     const subset = metrics.filter(m => new Date(m.date) >= cutoff && m[type] !== null && m[type] !== undefined);
-    if(subset.length === 0) return 0;
+    if (subset.length === 0) return 0;
     const sum = subset.reduce((acc, m) => acc + Number(m[type]), 0);
     return sum / subset.length;
   };
 
   const calcStreak = (metrics, type, threshold) => {
     let streak = 0;
-    for(let m of metrics) {
-      if(m[type] !== null && m[type] !== undefined && Number(m[type]) >= threshold) streak++;
+    for (let m of metrics) {
+      if (m[type] !== null && m[type] !== undefined && Number(m[type]) >= threshold) streak++;
       else break;
     }
     return streak;
@@ -146,11 +146,11 @@ export default function Health() {
   const sleepAvg7 = calcAvg(db.healthMetrics || [], 7, 'sleep_hours').toFixed(1);
   const stepsAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'steps'));
   const weightAvg7 = calcAvg(db.healthMetrics || [], 7, 'weight').toFixed(1);
-  
+
   const sleepAvg30 = calcAvg(db.healthMetrics || [], 30, 'sleep_hours').toFixed(1);
   const stepsAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'steps'));
   const weightAvg30 = calcAvg(db.healthMetrics || [], 30, 'weight').toFixed(1);
-  
+
   const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', goals.sleep);
   const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.steps);
 
@@ -200,26 +200,26 @@ export default function Health() {
             <Settings size={18} />
           </button>
         </div>
-        
+
         {showGoals && (
           <div className="mb-4 p-4 rounded bg-black/40 border border-white/10">
             <h4 className="text-sm font-bold text-white mb-3">My Targets</h4>
             <div className="grid grid-cols-2 gap-3 mb-4">
               <div>
                 <label className="text-xs text-secondary mb-1 block">Sleep (h)</label>
-                <input type="number" step="0.5" className="input w-full p-1 text-sm h-8" value={goalInputs.sleep_goal} onChange={e => setGoalInputs({...goalInputs, sleep_goal: e.target.value})} />
+                <input type="number" step="0.5" className="input w-full p-1 text-sm h-8" value={goalInputs.sleep_goal} onChange={e => setGoalInputs({ ...goalInputs, sleep_goal: e.target.value })} />
               </div>
               <div>
                 <label className="text-xs text-secondary mb-1 block">Steps</label>
-                <input type="number" className="input w-full p-1 text-sm h-8" value={goalInputs.step_goal} onChange={e => setGoalInputs({...goalInputs, step_goal: e.target.value})} />
+                <input type="number" className="input w-full p-1 text-sm h-8" value={goalInputs.step_goal} onChange={e => setGoalInputs({ ...goalInputs, step_goal: e.target.value })} />
               </div>
               <div>
                 <label className="text-xs text-secondary mb-1 block">Weight</label>
-                <input type="number" step="0.1" className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal} onChange={e => setGoalInputs({...goalInputs, weight_goal: e.target.value})} />
+                <input type="number" step="0.1" className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal} onChange={e => setGoalInputs({ ...goalInputs, weight_goal: e.target.value })} />
               </div>
               <div>
                 <label className="text-xs text-secondary mb-1 block">Unit</label>
-                <select className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal_unit} onChange={e => setGoalInputs({...goalInputs, weight_goal_unit: e.target.value})}>
+                <select className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal_unit} onChange={e => setGoalInputs({ ...goalInputs, weight_goal_unit: e.target.value })}>
                   <option value="kg">kg</option>
                   <option value="lbs">lbs</option>
                 </select>
@@ -260,20 +260,20 @@ export default function Health() {
         <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
           <Moon className="text-accent-primary" /> Sleep Tracker
         </div>
-        
+
         <div className="mb-4">
           <label className="text-sm font-medium text-secondary block mb-2">Today's Sleep (Hours)</label>
           <div className="flex gap-2">
-            <input 
-              type="number" 
-              className="input flex-1" 
+            <input
+              type="number"
+              className="input flex-1"
               placeholder="e.g. 7.5"
               step="0.1"
               value={sleepInput}
               onChange={(e) => setSleepInput(e.target.value)}
             />
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={() => handleSave('sleep_hours')}
               disabled={saving || !sleepInput}
             >
@@ -293,10 +293,10 @@ export default function Health() {
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
                     {m.sleep_hours}h
-                    <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
+                    <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>
                       {m.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}
                     </span>
-                    <button 
+                    <button
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
                       onClick={() => handleDelete(m.date, 'sleep_hours')}
                       disabled={deletingId === `${m.date}-sleep_hours`}
@@ -316,19 +316,19 @@ export default function Health() {
         <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
           <Footprints className="text-accent-primary" /> Steps Tracker
         </div>
-        
+
         <div className="mb-4">
           <label className="text-sm font-medium text-secondary block mb-2">Today's Step Count</label>
           <div className="flex gap-2">
-            <input 
-              type="number" 
-              className="input flex-1" 
+            <input
+              type="number"
+              className="input flex-1"
               placeholder="e.g. 10000"
               value={stepsInput}
               onChange={(e) => setStepsInput(e.target.value)}
             />
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={() => handleSave('steps')}
               disabled={saving || !stepsInput}
             >
@@ -348,10 +348,10 @@ export default function Health() {
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
                     {m.steps.toLocaleString()}
-                    <span className="badge text-[10px]" style={m.steps >= goals.steps ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
+                    <span className="badge text-[10px]" style={m.steps >= goals.steps ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>
                       {m.steps >= goals.steps ? 'Active' : 'Low'}
                     </span>
-                    <button 
+                    <button
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
                       onClick={() => handleDelete(m.date, 'steps')}
                       disabled={deletingId === `${m.date}-steps`}
@@ -371,20 +371,20 @@ export default function Health() {
         <div className="flex items-center gap-3 mb-4 text-gradient font-bold" style={{ fontSize: '1.25rem' }}>
           <Scale className="text-accent-primary" /> Weight Tracker
         </div>
-        
+
         <div className="mb-4">
           <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({goals.weightUnit})</label>
           <div className="flex gap-2">
-            <input 
-              type="number" 
-              className="input flex-1" 
+            <input
+              type="number"
+              className="input flex-1"
               placeholder={`e.g. ${goals.weight || 80}`}
               step="0.1"
               value={weightInput}
               onChange={(e) => setWeightInput(e.target.value)}
             />
-            <button 
-              className="btn btn-primary" 
+            <button
+              className="btn btn-primary"
               onClick={() => handleSave('weight')}
               disabled={saving || !weightInput}
             >
@@ -397,35 +397,60 @@ export default function Health() {
           <div className="flex justify-between items-center mb-3">
             <h4 className="text-sm font-bold">Recent History</h4>
             {weightHistoryData.length > 1 && (
-              <span className="text-xs text-muted flex items-center gap-1"><TrendingUp size={12}/> 30d Trend</span>
+              <span className="text-xs text-muted flex items-center gap-1"><TrendingUp size={12} /> 30d Trend</span>
             )}
           </div>
-
           {weightHistoryData.length > 1 && (
-            <div style={{ height: '96px', width: '100%', marginBottom: '16px' }}>
+            <div style={{ height: '200px', width: '100%', marginBottom: '16px' }}>
               <ResponsiveContainer width="100%" height="100%">
-                <LineChart data={weightHistoryData}>
+                <LineChart data={weightHistoryData} margin={{ top: 10, right: 10, left: -10, bottom: 0 }}>
+                  <defs>
+                    <linearGradient id="weightGradient" x1="0" y1="0" x2="0" y2="1">
+                      <stop offset="5%" stopColor="var(--accent-primary)" stopOpacity={0.3}/>
+                      <stop offset="95%" stopColor="var(--accent-primary)" stopOpacity={0}/>
+                    </linearGradient>
+                  </defs>
+                  <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
+                  <XAxis 
+                    dataKey="date" 
+                    stroke="var(--text-muted)" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false} 
+                  />
+                  <YAxis 
+                    domain={['dataMin - 0.5', 'dataMax + 0.5']} 
+                    stroke="var(--text-muted)" 
+                    fontSize={11} 
+                    tickLine={false} 
+                    axisLine={false}
+                    tickFormatter={v => `${Number(v).toFixed(1)}`}
+                    width={45}
+                  />
                   <Tooltip 
-                    contentStyle={{ backgroundColor: 'var(--surface-color)', border: 'none', borderRadius: '4px', fontSize: '12px' }}
-                    itemStyle={{ color: 'var(--accent-primary)' }}
-                    labelStyle={{ color: 'var(--text-secondary)' }}
+                    contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', fontSize: '13px', padding: '8px 12px' }}
+                    itemStyle={{ color: 'var(--accent-primary)', fontWeight: 'bold' }}
+                    labelStyle={{ color: 'var(--text-secondary)', marginBottom: '4px' }}
+                    formatter={v => [`${v} kg`, 'Weight']}
                   />
                   <Line 
                     type="monotone" 
                     dataKey="weight" 
                     stroke="var(--accent-primary)" 
-                    strokeWidth={2}
-                    dot={false}
-                    activeDot={{ r: 4 }}
+                    strokeWidth={2.5}
+                    dot={{ fill: 'var(--accent-primary)', stroke: 'var(--surface-color)', strokeWidth: 2, r: 5 }}
+                    activeDot={{ r: 7, fill: 'var(--accent-primary)', stroke: 'white', strokeWidth: 2 }}
+                    fill="url(#weightGradient)"
                   />
                   {goals.weight && (
                     <Line 
                       type="monotone" 
                       dataKey={() => goals.weight} 
                       stroke="var(--success)" 
-                      strokeDasharray="3 3" 
-                      strokeWidth={1}
+                      strokeDasharray="5 5" 
+                      strokeWidth={1.5}
                       dot={false}
+                      name="Goal"
                     />
                   )}
                 </LineChart>
@@ -442,7 +467,7 @@ export default function Health() {
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
                     {m.weight} {m.weight_unit || goals.weightUnit}
-                    <button 
+                    <button
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
                       onClick={() => handleDelete(m.date, 'weight')}
                       disabled={deletingId === `${m.date}-weight`}
