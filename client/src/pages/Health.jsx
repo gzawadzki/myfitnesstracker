@@ -2,17 +2,10 @@ import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { useToast } from '../components/Toast';
+import GoalsForm from '../components/GoalsForm';
+import { formatWeightGoal, getGoalFormValues, hasIncompleteGoals } from '../components/goalsUtils';
 import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, Heart, Flame } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
-
-function getGoals(preferences) {
-  return {
-    sleep: preferences?.sleep_goal ?? 7.5,
-    steps: preferences?.step_goal ?? 8000,
-    weight: preferences?.weight_goal ?? null,
-    weightUnit: preferences?.weight_goal_unit ?? 'kg',
-  };
-}
 
 export default function Health() {
   const { db, saveDailyHealthMetric, deleteDailyHealthMetric } = useData();
@@ -36,21 +29,17 @@ export default function Health() {
   const [caloriesInput, setCaloriesInput] = useState(todayMetrics.calories_burned || "");
 
   // Goals
-  const goals = getGoals(prefs);
+  const goals = getGoalFormValues(prefs);
+  const hasIncomplete = hasIncompleteGoals(prefs);
   const [showGoals, setShowGoals] = useState(false);
-  const [goalInputs, setGoalInputs] = useState({
-    sleep_goal: goals.sleep,
-    step_goal: goals.steps,
-    weight_goal: goals.weight || '',
-    weight_goal_unit: goals.weightUnit
-  });
+  const [hasAutoOpenedGoals, setHasAutoOpenedGoals] = useState(false);
 
   React.useEffect(() => {
-    if (prefs) {
-      const g = getGoals(prefs);
-      setGoalInputs({ sleep_goal: g.sleep, step_goal: g.steps, weight_goal: g.weight || '', weight_goal_unit: g.weightUnit });
+    if (hasIncomplete && !hasAutoOpenedGoals) {
+      setShowGoals(true);
+      setHasAutoOpenedGoals(true);
     }
-  }, [prefs]);
+  }, [hasAutoOpenedGoals, hasIncomplete]);
 
   // Expand state
   const [expandedCard, setExpandedCard] = useState(null);
@@ -91,21 +80,10 @@ export default function Health() {
     }
   };
 
-  const handleSaveAll = async () => {
-    const toSave = [];
-    if (sleepInput) toSave.push('sleep_hours');
-    if (stepsInput) toSave.push('steps');
-    if (weightInput) toSave.push('weight');
-    if (heartRateInput) toSave.push('heart_rate');
-    if (caloriesInput) toSave.push('calories_burned');
-    for (const t of toSave) await handleSave(t);
-    if (toSave.length > 0) toast.success('All metrics saved');
-  };
-
-  const handleSaveGoals = async () => {
+  const handleSaveGoals = async (updates) => {
     try {
       setSaving(true);
-      await saveUserPreferences(goalInputs);
+      await saveUserPreferences(updates);
       setShowGoals(false);
     } catch (err) {
       console.error(err);
@@ -152,12 +130,10 @@ export default function Health() {
   const sleepAvg30 = calcAvg(db.healthMetrics || [], 30, 'sleep_hours').toFixed(1);
   const stepsAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'steps'));
   const weightAvg30 = calcAvg(db.healthMetrics || [], 30, 'weight').toFixed(1);
-  const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', goals.sleep);
-  const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.steps);
+  const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', goals.sleep_goal);
+  const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.step_goal);
   const hrAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'heart_rate'));
-  const hrAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'heart_rate'));
   const calAvg7 = Math.round(calcAvg(db.healthMetrics || [], 7, 'calories_burned'));
-  const calAvg30 = Math.round(calcAvg(db.healthMetrics || [], 30, 'calories_burned'));
 
   // Weight chart data
   const thirtyDaysAgo = new Date(); thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -228,30 +204,12 @@ export default function Health() {
         {showGoals && (
           <div className="mb-4 p-4 rounded-lg bg-black/40 border border-white/10">
             <h4 className="text-sm font-bold text-white mb-3">My Targets</h4>
-            <div className="grid grid-cols-2 gap-3 mb-4">
-              <div>
-                <label className="text-xs text-secondary mb-1 block">Sleep (h)</label>
-                <input type="number" step="0.5" className="input w-full p-1 text-sm h-8" value={goalInputs.sleep_goal} onChange={e => setGoalInputs({ ...goalInputs, sleep_goal: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-secondary mb-1 block">Steps</label>
-                <input type="number" className="input w-full p-1 text-sm h-8" value={goalInputs.step_goal} onChange={e => setGoalInputs({ ...goalInputs, step_goal: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-secondary mb-1 block">Weight ({goals.weightUnit})</label>
-                <input type="number" step="0.1" className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal} onChange={e => setGoalInputs({ ...goalInputs, weight_goal: e.target.value })} />
-              </div>
-              <div>
-                <label className="text-xs text-secondary mb-1 block">Unit</label>
-                <select className="input w-full p-1 text-sm h-8" value={goalInputs.weight_goal_unit} onChange={e => setGoalInputs({ ...goalInputs, weight_goal_unit: e.target.value })}>
-                  <option value="kg">kg</option>
-                  <option value="lbs">lbs</option>
-                </select>
-              </div>
-            </div>
-            <button className="btn btn-primary w-full text-sm h-8" onClick={handleSaveGoals} disabled={saving}>
-              {saving ? 'Saving...' : 'Save Goals'}
-            </button>
+            <GoalsForm
+              preferences={prefs}
+              onSave={handleSaveGoals}
+              saving={saving}
+              showOnboardingCopy={hasIncomplete}
+            />
           </div>
         )}
 
@@ -271,8 +229,8 @@ export default function Health() {
         <div className="flex gap-4 mt-3 pt-3" style={{ borderTop: '1px solid rgba(255,255,255,0.06)' }}>
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Weight</div>
-            <div className="text-sm">7d: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</strong> · 30d: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${goals.weightUnit}` : '--'}</strong></div>
-            <div className="text-xs text-muted mt-1">🎯 {goals.weight || '--'} {goals.weightUnit}</div>
+            <div className="text-sm">7d: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7} ${goals.weight_goal_unit}` : '--'}</strong> · 30d: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30} ${goals.weight_goal_unit}` : '--'}</strong></div>
+            <div className="text-xs text-muted mt-1">🎯 {formatWeightGoal(goals.weight_goal, goals.weight_goal_unit)}</div>
           </div>
           <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
           <div className="flex-1">
@@ -297,8 +255,8 @@ export default function Health() {
           <div className="text-right">
             <div className="font-bold text-white">{todayMetrics.sleep_hours ? `${todayMetrics.sleep_hours}h` : '—'}</div>
             {todayMetrics.sleep_hours && (
-              <span className="text-[10px]" style={{ color: todayMetrics.sleep_hours >= goals.sleep ? 'var(--success)' : 'var(--warning)' }}>
-                {todayMetrics.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}
+              <span className="text-[10px]" style={{ color: todayMetrics.sleep_hours >= goals.sleep_goal ? 'var(--success)' : 'var(--warning)' }}>
+                {todayMetrics.sleep_hours >= goals.sleep_goal ? 'Optimal' : 'Low'}
               </span>
             )}
           </div>
@@ -314,7 +272,7 @@ export default function Health() {
             {savedFields.sleep_hours && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
             {renderHistory(recentMetrics, 'sleep_hours',
               m => `${m.sleep_hours}h`,
-              m => <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.sleep_hours >= goals.sleep ? 'Optimal' : 'Low'}</span>
+              m => <span className="badge text-[10px]" style={m.sleep_hours >= goals.sleep_goal ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.sleep_hours >= goals.sleep_goal ? 'Optimal' : 'Low'}</span>
             )}
           </div>
         )}
@@ -333,8 +291,8 @@ export default function Health() {
           <div className="text-right">
             <div className="font-bold text-white">{todayMetrics.steps ? todayMetrics.steps.toLocaleString() : '—'}</div>
             {todayMetrics.steps && (
-              <span className="text-[10px]" style={{ color: todayMetrics.steps >= goals.steps ? 'var(--success)' : 'var(--warning)' }}>
-                {todayMetrics.steps >= goals.steps ? 'Active' : 'Low'}
+              <span className="text-[10px]" style={{ color: todayMetrics.steps >= goals.step_goal ? 'var(--success)' : 'var(--warning)' }}>
+                {todayMetrics.steps >= goals.step_goal ? 'Active' : 'Low'}
               </span>
             )}
           </div>
@@ -350,7 +308,7 @@ export default function Health() {
             {savedFields.steps && <span className="text-xs text-success mt-1 block">✓ Saved</span>}
             {renderHistory(recentMetrics, 'steps',
               m => m.steps.toLocaleString(),
-              m => <span className="badge text-[10px]" style={m.steps >= goals.steps ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.steps >= goals.steps ? 'Active' : 'Low'}</span>
+              m => <span className="badge text-[10px]" style={m.steps >= goals.step_goal ? { background: 'var(--success)', color: 'white' } : { background: 'var(--warning)', color: 'white' }}>{m.steps >= goals.step_goal ? 'Active' : 'Low'}</span>
             )}
           </div>
         )}
@@ -364,13 +322,13 @@ export default function Health() {
           </div>
           <div className="flex-1 min-w-0">
             <div className="font-bold text-sm">Weight</div>
-            <div className="text-xs text-muted">7d avg: {weightAvg7 > 0 ? `${weightAvg7}${goals.weightUnit}` : '--'}</div>
+            <div className="text-xs text-muted">7d avg: {weightAvg7 > 0 ? `${weightAvg7} ${goals.weight_goal_unit}` : '--'}</div>
           </div>
           <div className="text-right">
-            <div className="font-bold text-white">{todayMetrics.weight ? `${todayMetrics.weight}${goals.weightUnit}` : '—'}</div>
-            {goals.weight && todayMetrics.weight && (
-              <span className="text-[10px]" style={{ color: Math.abs(todayMetrics.weight - goals.weight) < 1 ? 'var(--success)' : 'var(--warning)' }}>
-                {Math.abs(todayMetrics.weight - goals.weight) < 1 ? 'On target' : `${todayMetrics.weight > goals.weight ? '+' : ''}${(todayMetrics.weight - goals.weight).toFixed(1)}`}
+            <div className="font-bold text-white">{todayMetrics.weight ? `${todayMetrics.weight} ${goals.weight_goal_unit}` : '—'}</div>
+            {goals.weight_goal && todayMetrics.weight && (
+              <span className="text-[10px]" style={{ color: Math.abs(todayMetrics.weight - goals.weight_goal) < 1 ? 'var(--success)' : 'var(--warning)' }}>
+                {Math.abs(todayMetrics.weight - goals.weight_goal) < 1 ? 'On target' : `${todayMetrics.weight > goals.weight_goal ? '+' : ''}${(todayMetrics.weight - goals.weight_goal).toFixed(1)} ${goals.weight_goal_unit}`}
               </span>
             )}
           </div>
@@ -378,7 +336,10 @@ export default function Health() {
         {expandedCard === 'weight' && (
           <div className="p-4 pt-0" style={{ borderTop: '1px solid var(--surface-border)' }}>
             <div className="flex gap-2 mt-4">
-              <input type="number" step="0.1" className="input flex-1" placeholder={`Weight (${goals.weightUnit})`} value={weightInput} onChange={e => setWeightInput(e.target.value)} />
+              <div className="relative flex-1">
+                <input type="number" step="0.1" className="input w-full pr-12" placeholder={`Weight (e.g. 70 ${goals.weight_goal_unit})`} value={weightInput} onChange={e => setWeightInput(e.target.value)} />
+                <span className="absolute right-3 top-1/2 -translate-y-1/2 text-xs text-muted">{goals.weight_goal_unit}</span>
+              </div>
               <button className="btn btn-primary" onClick={() => handleSave('weight')} disabled={saving || !weightInput}>
                 {saving ? '...' : <Save size={18} />}
               </button>
@@ -398,14 +359,14 @@ export default function Health() {
                     <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
                     <XAxis dataKey="date" stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} />
                     <YAxis domain={['dataMin - 0.5', 'dataMax + 0.5']} stroke="var(--text-muted)" fontSize={11} tickLine={false} axisLine={false} tickFormatter={v => `${Number(v).toFixed(1)}`} width={45} />
-                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', fontSize: '13px', padding: '8px 12px' }} formatter={v => [`${v} ${goals.weightUnit}`, 'Weight']} />
+                    <Tooltip contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: '8px', fontSize: '13px', padding: '8px 12px' }} formatter={v => [`${v} ${goals.weight_goal_unit}`, 'Weight']} />
                     <Line type="monotone" dataKey="weight" stroke="var(--accent-primary)" strokeWidth={2.5} dot={{ fill: 'var(--accent-primary)', stroke: 'var(--surface-color)', strokeWidth: 2, r: 4 }} activeDot={{ r: 6 }} fill="url(#weightGradient)" />
-                    {goals.weight && <Line type="monotone" dataKey={() => goals.weight} stroke="var(--success)" strokeDasharray="5 5" strokeWidth={1.5} dot={false} name="Goal" />}
+                    {goals.weight_goal && <Line type="monotone" dataKey={() => goals.weight_goal} stroke="var(--success)" strokeDasharray="5 5" strokeWidth={1.5} dot={false} name="Goal" />}
                   </LineChart>
                 </ResponsiveContainer>
               </div>
             )}
-            {renderHistory(recentMetrics, 'weight', m => `${m.weight} ${m.weight_unit || goals.weightUnit}`, null)}
+            {renderHistory(recentMetrics, 'weight', m => `${m.weight} ${m.weight_unit || goals.weight_goal_unit}`, null)}
           </div>
         )}
       </div>
