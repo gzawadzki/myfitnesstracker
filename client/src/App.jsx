@@ -1,8 +1,9 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, LineChart, Activity, User, Plus } from 'lucide-react';
+import { Home, LineChart, Activity, User, Plus, HeartPulse } from 'lucide-react';
 import NewWorkout from './pages/NewWorkout';
 import Progress from './pages/Progress';
+import Health from './pages/Health';
 import { useData } from './context/DataContext';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchGoogleFitData } from './lib/googleFit';
@@ -34,28 +35,35 @@ function BottomNav() {
         <LineChart size={24} />
         <span>Progress</span>
       </Link>
-      <Link to="/profile" className={`nav-item ${path === '/profile' ? 'active' : ''}`}>
-        <User size={24} />
-        <span>Profile</span>
+      <Link to="/health" className={`nav-item ${path === '/health' ? 'active' : ''}`}>
+        <HeartPulse size={24} />
+        <span>Health</span>
       </Link>
     </nav>
   );
 }
 
 function Dashboard() {
-  const { db } = useData();
-  const [sleep, setSleep] = useState(7.25); // 7h 15m
-  const [steps, setSteps] = useState(6240);
+  const { db, saveDailyHealthMetric } = useData();
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
+
+  // Get today's local date string (YYYY-MM-DD)
+  const todayRaw = new Date();
+  const offset = todayRaw.getTimezoneOffset() * 60000;
+  const todayStr = (new Date(todayRaw - offset)).toISOString().split('T')[0];
+  const todayMetrics = db.healthMetrics?.find(m => m.date === todayStr) || {};
+  
+  const sleep = todayMetrics.sleep_hours || 0;
+  const steps = todayMetrics.steps || 0;
 
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
         setGoogleLoading(true);
         const { steps: fitSteps, sleepHours: fitSleep } = await fetchGoogleFitData(tokenResponse.access_token);
-        if (fitSteps > 0) setSteps(fitSteps);
-        if (fitSleep > 0) setSleep(fitSleep);
+        if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
+        if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
         setIsGoogleConnected(true);
       } catch (err) {
         console.error("Failed to sync metrics from Google Fit:", err);
@@ -67,8 +75,8 @@ function Dashboard() {
     onError: error => console.error('Login Failed:', error)
   });
   
-  const nextWorkout = db.workouts[0];
-  const nextPhase = db.phases.find(p => p.id === nextWorkout.phaseId);
+  const nextWorkout = db.workouts && db.workouts.length > 0 ? db.workouts[0] : null;
+  const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
 
   const formatSleep = (hoursDec) => {
     const h = Math.floor(hoursDec);
@@ -83,7 +91,9 @@ function Dashboard() {
           <h1 className="h1 mb-1">Overview</h1>
           <p className="text-secondary">Welcome back, Athlete!</p>
         </div>
-        <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
+        <Link to="/profile">
+          <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
+        </Link>
       </div>
 
       <div className="card mb-6 glass">
@@ -104,8 +114,8 @@ function Dashboard() {
         </h2>
         <div className="flex justify-between mt-4">
           <div className="flex-col items-center flex-1 text-center" onClick={() => {
-            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep);
-            if(val && !isNaN(val)) setSleep(parseFloat(val));
+            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 7.5);
+            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'sleep_hours', parseFloat(val));
           }}>
             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Sleep ✎</span>
             <div className="h2 mt-1 mb-1" style={{ color: sleep >= 7 ? 'var(--success)' : 'var(--warning)' }}>
@@ -117,8 +127,8 @@ function Dashboard() {
           </div>
           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
           <div className="flex-col items-center flex-1 text-center" onClick={() => {
-            const val = prompt("Enter today's steps:", steps);
-            if(val && !isNaN(val)) setSteps(parseInt(val));
+            const val = prompt("Enter today's steps:", steps || 5000);
+            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
           }}>
             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps ✎</span>
             <div className="h2 mt-1 mb-1" style={{ color: steps >= 8000 ? 'var(--success)' : 'var(--warning)' }}>
@@ -132,18 +142,24 @@ function Dashboard() {
       </div>
 
       <h2 className="h2 mb-4">Next Workout</h2>
-      <div className="card">
-        <div className="flex justify-between items-start mb-4">
-          <div>
-            <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase.name}</span>
-            <h3 className="h3">{nextWorkout.name}</h3>
-            <p className="text-secondary text-sm">{nextWorkout.exercises.length} Exercises</p>
+      {nextWorkout ? (
+        <div className="card">
+          <div className="flex justify-between items-start mb-4">
+            <div>
+              <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase?.name}</span>
+              <h3 className="h3">{nextWorkout.name}</h3>
+              <p className="text-secondary text-sm">{nextWorkout.exercises?.length} Exercises</p>
+            </div>
           </div>
+          <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
+            Start Workout
+          </Link>
         </div>
-        <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
-          Start Workout
-        </Link>
-      </div>
+      ) : (
+        <div className="card text-center text-muted p-6">
+          No workouts available. Please import your training plan.
+        </div>
+      )}
     </div>
   );
 }
@@ -177,7 +193,7 @@ function WorkoutLog() {
           <div className="text-center text-muted text-sm mt-8">No workouts logged yet.</div>
         ) : (
           sessions.map(session => {
-            const template = db.workouts.find(w => w.id === session.template_id);
+            const template = db.workouts && db.workouts.find(w => w.id === session.template_id);
             const templateName = template ? template.name : "Unknown Workout";
             const isExpanded = expandedSessionId === session.id;
             
@@ -272,7 +288,16 @@ function WorkoutLog() {
 
 function WorkoutSelect() {
   const { db } = useData();
-  const [selectedPhaseId, setSelectedPhaseId] = useState(db.phases[0].id);
+  const hasPhases = db.phases && db.phases.length > 0;
+  const [selectedPhaseId, setSelectedPhaseId] = useState(hasPhases ? db.phases[0].id : null);
+
+  if (!hasPhases) {
+    return (
+      <div className="animate-fade-in text-center p-6 text-muted">
+        No workouts found in the database.
+      </div>
+    );
+  }
 
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
@@ -357,7 +382,8 @@ function Layout() {
           <Route path="/workouts/select" element={<WorkoutSelect />} />
           <Route path="/workouts/new" element={<NewWorkout />} />
           <Route path="/progress" element={<Progress />} />
-          <Route path="/profile" element={<div className="p-4"><h1 className="h1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
+          <Route path="/health" element={<Health />} />
+          <Route path="/profile" element={<div className="animate-fade-in p-4"><h1 className="h1 mb-1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
         </Routes>
       </main>
       <BottomNav />

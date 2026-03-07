@@ -32,12 +32,16 @@ export function DataProvider({ children }) {
         const { data: loggedSetsData, error: setsErr } = await supabase.from('logged_sets').select('*').order('created_at');
         if (setsErr) throw setsErr;
 
+        const { data: healthData, error: healthErr } = await supabase.from('health_metrics').select('*').order('date', { ascending: false });
+        if (healthErr && healthErr.code !== '42P01') throw healthErr; // Ignore table not found error initially until user runs the SQL
+
         // Reconstruct the `db` structure to match what the UI expects
         const mappedDb = {
           sessions: latestSessionsData.map(session => ({
             ...session,
             sets: loggedSetsData.filter(set => set.session_id === session.id)
           })),
+          healthMetrics: healthData || [],
           phases: phasesData,
           workouts: workoutsData.map(w => ({
             ...w,
@@ -148,8 +152,36 @@ export function DataProvider({ children }) {
     return true;
   };
 
+  const saveDailyHealthMetric = async (dateStr, type, value) => {
+    // type is 'sleep_hours' or 'steps'
+    const updatePayload = { date: dateStr };
+    updatePayload[type] = value;
+
+    const { data, error } = await supabase
+      .from('health_metrics')
+      .upsert(updatePayload, { onConflict: 'user_id, date' })
+      .select()
+      .single();
+
+    if (error) throw error;
+
+    // Update local context
+    setDb(prev => {
+      const existingIdx = prev.healthMetrics.findIndex(h => h.date === dateStr);
+      const newHealth = [...prev.healthMetrics];
+      if (existingIdx >= 0) {
+        newHealth[existingIdx] = { ...newHealth[existingIdx], ...data };
+      } else {
+        newHealth.unshift(data);
+      }
+      return { ...prev, healthMetrics: newHealth.sort((a,b) => new Date(b.date) - new Date(a.date)) };
+    });
+
+    return data;
+  };
+
   return (
-    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession }}>
+    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric }}>
       {children}
     </DataContext.Provider>
   );

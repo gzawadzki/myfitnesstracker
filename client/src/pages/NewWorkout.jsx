@@ -15,24 +15,32 @@ export default function NewWorkout() {
 
   // Parse workout ID from URL or default to first
   const queryParams = new URLSearchParams(location.search);
-  const workoutId = queryParams.get('id') || db.workouts[0].id;
-  const currentWorkout = db.workouts.find(w => w.id === workoutId);
-  const phase = db.phases.find(p => p.id === currentWorkout.phaseId);
+  const workoutId = queryParams.get('id') || (db.workouts && db.workouts.length > 0 ? db.workouts[0].id : null);
+  const currentWorkout = db.workouts?.find(w => w.id === workoutId);
+  const phase = currentWorkout ? db.phases?.find(p => p.id === currentWorkout.phaseId) : null;
+
+  if (!currentWorkout) {
+    return (
+      <div className="flex items-center justify-center p-6 min-h-screen text-center">
+        <div className="text-muted">Workout not found. Please select a valid workout from the dashboard.</div>
+      </div>
+    );
+  }
 
   // Map exercise identifiers to full names
-  const exercises = currentWorkout.exercises.map(ex => {
+  const exercises = currentWorkout.exercises?.map(ex => {
     const fullEx = db.exercises[ex.exerciseId];
     return {
       ...ex,
       id: ex.exerciseId,
       name: fullEx ? fullEx.name : ex.exerciseId
     };
-  });
+  }) || [];
 
   const exercise = exercises[activeExerciseIndex];
   
   // Initialize sets based on targetSets, populated with history if available
-  const currentSets = setsData[exercise.id] || Array.from({ length: exercise.targetSets || 1 }, (_, i) => {
+  const currentSets = (exercise && setsData[exercise.id]) || Array.from({ length: exercise?.targetSets || 1 }, (_, i) => {
     const historicalSet = exercise.history && exercise.history[i];
     return {
       id: i + 1,
