@@ -32,14 +32,6 @@ export default function Health() {
   const goals = getGoalFormValues(prefs);
   const hasIncomplete = hasIncompleteGoals(prefs);
   const [showGoals, setShowGoals] = useState(false);
-  const [hasAutoOpenedGoals, setHasAutoOpenedGoals] = useState(false);
-
-  React.useEffect(() => {
-    if (hasIncomplete && !hasAutoOpenedGoals) {
-      setShowGoals(true);
-      setHasAutoOpenedGoals(true);
-    }
-  }, [hasAutoOpenedGoals, hasIncomplete]);
 
   // Expand state
   const [expandedCard, setExpandedCard] = useState(null);
