@@ -155,9 +155,10 @@ export default function Health() {
   const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', goals.steps);
 
   // Weight Sparkline Data (Last 30 days)
+  const thirtyDaysAgo = new Date();
+  thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
   const weightHistoryData = (db.healthMetrics || [])
-    .filter(m => m.weight)
-    .slice(0, 30)
+    .filter(m => m.weight && new Date(m.date) >= thirtyDaysAgo)
     .reverse()
     .map(m => ({
       date: formatShortDate(m.date),
@@ -401,7 +402,7 @@ export default function Health() {
           </div>
 
           {weightHistoryData.length > 1 && (
-            <div className="h-24 w-full mb-4">
+            <div style={{ height: '96px', width: '100%', marginBottom: '16px' }}>
               <ResponsiveContainer width="100%" height="100%">
                 <LineChart data={weightHistoryData}>
                   <Tooltip 
