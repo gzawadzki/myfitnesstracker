@@ -48,7 +48,8 @@ function BottomNav() {
 function Dashboard() {
   const { db, saveDailyHealthMetric } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
-  const [isGoogleConnected, setIsGoogleConnected] = useState(() => !!localStorage.getItem('gfit_token'));
+  const [gfitToken, setGfitToken] = useState(null);
+  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null); // 'success' | 'error' | null
 
@@ -82,8 +83,8 @@ function Dashboard() {
       setTimeout(() => setSyncStatus(null), 3000);
     } catch (err) {
       console.error("Google Fit sync failed:", err);
-      // Token probably expired — clear it so user re-auths
-      localStorage.removeItem('gfit_token');
+      // Token expired — clear it so user re-auths
+      setGfitToken(null);
       setIsGoogleConnected(false);
       setSyncStatus('error');
     } finally {
@@ -93,7 +94,7 @@ function Dashboard() {
 
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      localStorage.setItem('gfit_token', tokenResponse.access_token);
+      setGfitToken(tokenResponse.access_token);
       setIsGoogleConnected(true);
       await syncGoogleFit(tokenResponse.access_token);
     },
@@ -103,9 +104,8 @@ function Dashboard() {
 
   // "Sync Now" handler — uses stored token, falls back to re-login
   const handleSyncNow = async () => {
-    const storedToken = localStorage.getItem('gfit_token');
-    if (storedToken) {
-      await syncGoogleFit(storedToken);
+    if (gfitToken) {
+      await syncGoogleFit(gfitToken);
     } else {
       loginGoogleFit();
     }

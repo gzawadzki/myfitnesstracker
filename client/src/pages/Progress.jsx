@@ -1,4 +1,4 @@
-import React, { useState } from 'react';
+import React, { useState, useEffect } from 'react';
 import { ChevronLeft } from 'lucide-react';
 import { useNavigate } from 'react-router-dom';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
@@ -7,8 +7,15 @@ import { useData } from '../context/DataContext';
 export default function Progress() {
   const { db } = useData();
   const navigate = useNavigate();
-  const [selectedExUrlId, setSelectedExUrlId] = useState('ex_1'); // Barbell Back Squat
+  const exerciseIds = Object.keys(db.exercises || {});
+  const [selectedExUrlId, setSelectedExUrlId] = useState(null);
   const [xAxisMode, setXAxisMode] = useState('week');
+
+  useEffect(() => {
+    if (!selectedExUrlId && exerciseIds.length > 0) {
+      setSelectedExUrlId(exerciseIds[0]);
+    }
+  }, [exerciseIds.length]);
   
   // We extract actual history data from the global db context to build the chart
   const buildChartData = (exerciseId) => {

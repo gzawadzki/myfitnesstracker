@@ -206,7 +206,7 @@ export default function NewWorkout() {
           finalSetsData[ex.id] = sets;
         }
       }
-      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, 7.5, 6200);
+      await saveWorkoutSession(currentWorkout.id, finalSetsData, workoutComment, null, null);
       navigate('/');
     } catch (err) {
       console.error("Failed to save workout:", err);

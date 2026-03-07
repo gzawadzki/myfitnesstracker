@@ -223,13 +223,17 @@ export function DataProvider({ children }) {
   };
 
   const deleteDailyHealthMetric = async (dateStr, type) => {
-    // We update the specific column to null or 0.
-    const updatePayload = { date: dateStr };
-    updatePayload[type] = null; // or 0, but null removes it
+    const { data: userData } = await supabase.auth.getUser();
+    const userId = userData?.user?.id;
+    if (!userId) throw new Error("Not logged in");
+
+    const updatePayload = {};
+    updatePayload[type] = null;
 
     const { data, error } = await supabase
       .from('health_metrics')
       .update(updatePayload)
+      .eq('user_id', userId)
       .eq('date', dateStr)
       .select()
       .single();
