@@ -37,24 +37,8 @@ export function DataProvider({ children }) {
           throw healthErr; 
         }
 
-        const { data: userData, error: userErr } = await supabase.auth.getUser();
-        let prefsData = null;
-        if (userData?.user?.id) {
-          const { data: pData, error: pErr } = await supabase.from('user_preferences').select('*').eq('user_id', userData.user.id).single();
-          if (!pErr && pData) {
-            prefsData = pData;
-          }
-        }
-
-
         // Reconstruct the `db` structure to match what the UI expects
         const mappedDb = {
-          preferences: prefsData || {
-            weight_goal: 80,
-            weight_goal_unit: 'kg',
-            step_goal: 8000,
-            sleep_goal: 7.5
-          },
           sessions: latestSessionsData.map(session => ({
             ...session,
             sets: loggedSetsData.filter(set => set.session_id === session.id)
@@ -175,10 +159,16 @@ export function DataProvider({ children }) {
     // type can be 'sleep_hours', 'steps', or 'weight'
     const updatePayload = { date: dateStr };
     updatePayload[type] = value;
+    
+    // We must ensure user_id is passed for a safe UPSERT that respects RLS/unique constraint
+    const { data: userData } = await supabase.auth.getUser();
+    if (userData?.user?.id) {
+       updatePayload.user_id = userData.user.id;
+    }
 
     const { data, error } = await supabase
       .from('health_metrics')
-      .upsert(updatePayload, { onConflict: 'user_id, date' })
+      .upsert(updatePayload, { onConflict: 'user_id,date' })
       .select()
       .single();
 
@@ -245,34 +235,8 @@ export function DataProvider({ children }) {
     return data;
   };
 
-  const saveUserPreferences = async (newPrefs) => {
-    const { data: userData } = await supabase.auth.getUser();
-    if (!userData?.user?.id) throw new Error("Not logged in");
-
-    const payload = {
-      user_id: userData.user.id,
-      ...newPrefs
-    };
-
-    const { data, error } = await supabase
-      .from('user_preferences')
-      .upsert(payload, { onConflict: 'user_id' })
-      .select()
-      .single();
-
-    if (error) throw error;
-
-    // Update local context
-    setDb(prev => ({
-      ...prev,
-      preferences: { ...(prev.preferences || {}), ...data }
-    }));
-
-    return data;
-  };
-
   return (
-    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric, saveUserPreferences }}>
+    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric }}>
       {children}
     </DataContext.Provider>
   );

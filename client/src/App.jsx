@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
 import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
+import { usePreferences } from './hooks/usePreferences';
 import NewWorkout from './pages/NewWorkout';
 import Progress from './pages/Progress';
 import Health from './pages/Health';
@@ -46,6 +47,7 @@ function BottomNav() {
 
 function Dashboard() {
   const { db, saveDailyHealthMetric } = useData();
+  const { preferences: prefs, loading: prefsLoading } = usePreferences();
   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
   const [googleLoading, setGoogleLoading] = useState(false);
 
@@ -87,6 +89,8 @@ function Dashboard() {
     const m = Math.round((hoursDec - h) * 60);
     return `${h}h ${m}m`;
   };
+
+  if (prefsLoading) return <div className="p-4 text-center text-muted">Loading dashboard...</div>;
 
   return (
     <div className="animate-fade-in">
@@ -143,11 +147,11 @@ function Dashboard() {
             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
           }}>
             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps ✎</span>
-            <div className="h2 mt-1 mb-1" style={{ color: steps >= (db.preferences?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
+            <div className="h2 mt-1 mb-1" style={{ color: steps >= (prefs?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
               {steps.toLocaleString()}
             </div>
-            <span className={`badge ${steps >= (db.preferences?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (db.preferences?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
-              {steps >= (db.preferences?.step_goal || 8000) ? 'Active' : 'Recovery'}
+            <span className={`badge ${steps >= (prefs?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (prefs?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+              {steps >= (prefs?.step_goal || 8000) ? 'Active' : 'Recovery'}
             </span>
           </div>
           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>

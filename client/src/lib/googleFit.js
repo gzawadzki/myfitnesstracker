@@ -69,6 +69,7 @@ export async function fetchGoogleFitData(accessToken) {
   }
 
   // 3. Fetch Weight (com.google.weight.summary)
+  // 3. Fetch Weight (com.google.weight.summary) with graceful failure
   let weightKg = null;
   try {
     const weightResponse = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
@@ -89,21 +90,15 @@ export async function fetchGoogleFitData(accessToken) {
     
     if (weightResponse.ok) {
       const weightData = await weightResponse.json();
-      if (weightData.bucket && weightData.bucket.length > 0) {
-        const dataset = weightData.bucket[0].dataset[0];
-        if (dataset && dataset.point && dataset.point.length > 0) {
-          // Average weight for the day (fpVal)
-          weightKg = dataset.point[0].value[0]?.fpVal || null;
-          if (weightKg !== null) {
-            weightKg = Number(weightKg.toFixed(1));
-          }
-        }
+      weightKg = weightData?.bucket?.[0]?.dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal ?? null;
+      if (weightKg !== null) {
+        weightKg = Number(weightKg.toFixed(1));
       }
     } else {
-      console.error("Failed to fetch weight:", await weightResponse.text());
+      console.warn("Google Fit weight fetch failed (non-fatal):", await weightResponse.text());
     }
   } catch (err) {
-    console.error("Error fetching weight:", err);
+    console.warn("Google Fit weight fetch failed (non-fatal):", err);
   }
 
   return { steps, sleepHours, weightKg };

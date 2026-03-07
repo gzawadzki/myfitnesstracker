@@ -1,9 +1,11 @@
 import React, { useState } from 'react';
 import { useData } from '../context/DataContext';
+import { usePreferences } from '../hooks/usePreferences';
 import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings } from 'lucide-react';
 
 export default function Health() {
-  const { db, saveDailyHealthMetric, deleteDailyHealthMetric, saveUserPreferences } = useData();
+  const { db, saveDailyHealthMetric, deleteDailyHealthMetric } = useData();
+  const { preferences: prefs, savePreferences: saveUserPreferences, loading: prefsLoading } = usePreferences();
   const [saving, setSaving] = useState(false);
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
@@ -20,14 +22,25 @@ export default function Health() {
   const [weightInput, setWeightInput] = useState(todayMetrics.weight || "");
 
   // Goal Settings State
-  const prefs = db.preferences || { sleep_goal: 7.5, step_goal: 8000, weight_goal: 80, weight_goal_unit: 'kg' };
   const [showGoals, setShowGoals] = useState(false);
   const [goalInputs, setGoalInputs] = useState({
-    sleep_goal: prefs.sleep_goal,
-    step_goal: prefs.step_goal,
-    weight_goal: prefs.weight_goal,
-    weight_goal_unit: prefs.weight_goal_unit
+    sleep_goal: 7.5,
+    step_goal: 8000,
+    weight_goal: 80,
+    weight_goal_unit: 'kg'
   });
+
+  // Sync state once preferences load
+  React.useEffect(() => {
+    if (prefs) {
+      setGoalInputs({
+        sleep_goal: prefs.sleep_goal,
+        step_goal: prefs.step_goal,
+        weight_goal: prefs.weight_goal,
+        weight_goal_unit: prefs.weight_goal_unit
+      });
+    }
+  }, [prefs]);
 
   const handleSave = async (type) => {
     try {
@@ -112,6 +125,8 @@ export default function Health() {
   const sleepStreak = calcStreak(db.healthMetrics || [], 'sleep_hours', prefs.sleep_goal);
   const stepsStreak = calcStreak(db.healthMetrics || [], 'steps', prefs.step_goal);
 
+  if (prefsLoading) return <div className="p-4 text-center text-muted">Loading health dashboard...</div>;
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '80px' }}>
       <header className="mb-6 p-4 pb-0">
@@ -171,21 +186,21 @@ export default function Health() {
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Sleep</div>
             <div className="text-sm">7d Avg: <strong className="text-white">{sleepAvg7}h</strong></div>
             <div className="text-sm">30d Avg: <strong className="text-white">{sleepAvg30}h</strong></div>
-            <div className="text-sm mt-1">Streak: <strong className="text-success">{sleepStreak} days</strong> (≥{prefs.sleep_goal}h)</div>
+            <div className="text-sm mt-1">Streak: <strong className="text-success">{sleepStreak} days</strong> (≥{prefs?.sleep_goal || 7.5}h)</div>
           </div>
           <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Steps</div>
             <div className="text-sm">7d Avg: <strong className="text-white">{stepsAvg7.toLocaleString()}</strong></div>
             <div className="text-sm">30d Avg: <strong className="text-white">{stepsAvg30.toLocaleString()}</strong></div>
-            <div className="text-sm mt-1">Streak: <strong className="text-success">{stepsStreak} days</strong> (≥{(prefs.step_goal / 1000).toFixed(1)}k)</div>
+            <div className="text-sm mt-1">Streak: <strong className="text-success">{stepsStreak} days</strong> (≥{((prefs?.step_goal || 8000) / 1000).toFixed(1)}k)</div>
           </div>
           <div style={{ width: '1px', background: 'var(--surface-border)', opacity: 0.5 }}></div>
           <div className="flex-1">
             <div className="text-xs text-secondary mb-1 uppercase tracking-wider">Weight</div>
-            <div className="text-sm">7d Avg: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${prefs.weight_goal_unit}` : '--'}</strong></div>
-            <div className="text-sm">30d Avg: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${prefs.weight_goal_unit}` : '--'}</strong></div>
-            <div className="text-sm mt-1">🎯 <strong className="text-white">{prefs.weight_goal}</strong> {prefs.weight_goal_unit}</div>
+            <div className="text-sm">7d Avg: <strong className="text-white">{weightAvg7 > 0 ? `${weightAvg7}${prefs?.weight_goal_unit || 'kg'}` : '--'}</strong></div>
+            <div className="text-sm">30d Avg: <strong className="text-white">{weightAvg30 > 0 ? `${weightAvg30}${prefs?.weight_goal_unit || 'kg'}` : '--'}</strong></div>
+            <div className="text-sm mt-1">🎯 <strong className="text-white">{prefs?.weight_goal || 80}</strong> {prefs?.weight_goal_unit || 'kg'}</div>
           </div>
         </div>
       </div>
@@ -228,8 +243,8 @@ export default function Health() {
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
                     {m.sleep_hours}h
-                    <span className="badge text-[10px]" style={m.sleep_hours >= prefs.sleep_goal ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
-                      {m.sleep_hours >= prefs.sleep_goal ? 'Optimal' : 'Low'}
+                    <span className="badge text-[10px]" style={m.sleep_hours >= (prefs?.sleep_goal || 7.5) ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
+                      {m.sleep_hours >= (prefs?.sleep_goal || 7.5) ? 'Optimal' : 'Low'}
                     </span>
                     <button 
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
@@ -283,8 +298,8 @@ export default function Health() {
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
                     {m.steps.toLocaleString()}
-                    <span className="badge text-[10px]" style={m.steps >= prefs.step_goal ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
-                      {m.steps >= prefs.step_goal ? 'Active' : 'Low'}
+                    <span className="badge text-[10px]" style={m.steps >= (prefs?.step_goal || 8000) ? {background: 'var(--success)', color: 'white'} : {background: 'var(--warning)', color: 'white'}}>
+                      {m.steps >= (prefs?.step_goal || 8000) ? 'Active' : 'Low'}
                     </span>
                     <button 
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
@@ -308,12 +323,12 @@ export default function Health() {
         </div>
         
         <div className="mb-4">
-          <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({prefs.weight_goal_unit})</label>
+          <label className="text-sm font-medium text-secondary block mb-2">Today's Body Weight ({prefs?.weight_goal_unit || 'kg'})</label>
           <div className="flex gap-2">
             <input 
               type="number" 
               className="input flex-1" 
-              placeholder={`e.g. ${prefs.weight_goal}`}
+              placeholder={`e.g. ${prefs?.weight_goal || 80}`}
               step="0.1"
               value={weightInput}
               onChange={(e) => setWeightInput(e.target.value)}
@@ -338,7 +353,7 @@ export default function Health() {
                 <div key={idx} className="flex justify-between items-center text-sm p-2 rounded" style={{ background: 'var(--surface-color)' }}>
                   <span className="text-secondary">{formatShortDate(m.date)}</span>
                   <span className="font-bold flex items-center gap-2">
-                    {m.weight} {m.weight_unit || prefs.weight_goal_unit}
+                    {m.weight} {m.weight_unit || prefs?.weight_goal_unit || 'kg'}
                     <button 
                       className="p-1 ml-2 text-muted hover:text-warning transition-colors"
                       onClick={() => handleDelete(m.date, 'weight')}
