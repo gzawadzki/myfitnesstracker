@@ -89,6 +89,7 @@ export default function Progress() {
   const selectedEx = db.exercises[resolvedExerciseId];
   const isTruncated = selectedRange !== 'all' && filteredHistoryCount < totalHistoryCount;
   const selectedRangeLabel = RANGE_OPTIONS.find(option => option.key === selectedRange)?.label || '30D';
+  const truncatedSessionsLabel = selectedRange === 'all' ? '' : selectedRangeLabel.replace(/d/i, '');
 
   // 1. Calculate Real Metric Cards Data
   const totalWorkouts = db.sessions ? db.sessions.length : 0;
@@ -115,7 +116,7 @@ export default function Progress() {
     const dayMetrics = db.healthMetrics?.find(m => m.date === sessDate);
     const sleep = dayMetrics ? Number(dayMetrics.sleep_hours) : 0;
     
-    const exSets = (sess.sets || []).filter(s => s.exercise_id === selectedExUrlId);
+    const exSets = (sess.sets || []).filter(s => s.exercise_id === resolvedExerciseId);
     if (sleep >= sleepGoal) {
       wellRestedSets.push(...exSets);
     } else if (sleep > 0) {
@@ -216,7 +217,7 @@ export default function Progress() {
 
       {isTruncated && (
         <p className="text-xs text-muted mb-3">
-          Showing last {filteredHistoryCount} sessions from the {selectedRangeLabel.toLowerCase()} window.
+          Showing last {truncatedSessionsLabel} sessions from your selected range.
         </p>
       )}
 
