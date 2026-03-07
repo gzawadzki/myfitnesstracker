@@ -1,3 +1,4 @@
+/* eslint-disable react-refresh/only-export-components */
 import React, { createContext, useContext, useState, useEffect } from 'react';
 import { supabase } from '../lib/supabase';
 
@@ -73,7 +74,7 @@ export function DataProvider({ children }) {
 
         // Inject the full history across all sessions for the Progress Chart 
         // We look at all past sets for a specific exercise and average/max them out per session
-        latestSessionsData.reverse().forEach((sess, idx) => {
+        latestSessionsData.reverse().forEach((sess) => {
           const sessSets = loggedSetsData.filter(s => s.session_id === sess.id);
           const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
           
@@ -104,6 +105,7 @@ export function DataProvider({ children }) {
     }
 
     loadData();
+     
   }, []);
 
   const saveWorkoutSession = async (templateId, setsData, notes, sleep, steps) => {
