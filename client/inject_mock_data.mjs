@@ -22,79 +22,14 @@ async function injectMockData() {
   console.log(`Target User ID: ${userId}`);
   console.log(`========================================\n`);
 
-  // Get templates and exercises
-  const { data: templates } = await supabase.from('workout_templates').select('*').limit(5);
-  const { data: exercises } = await supabase.from('exercises').select('*').limit(20);
+    // Since this script runs outside the browser, we have no active JWT session.
+    // Supabase RLS will block `insert()` calls that don't match `auth.uid()`.
+    // To bypass this without a Service Role Key, we will tell the user to run this logic from the browser console,
+    // or we can add a temporary button to the UI.
 
-  if (!templates || templates.length === 0) {
-    console.error("No workout templates found. Have you seeded the db?");
-    return;
-  }
-
-  // Generate 14 days of Health Metrics
-  const healthData = [];
-  for (let i = 14; i >= 0; i--) {
-    const d = new Date();
-    d.setDate(d.getDate() - i);
-    const dateStr = d.toISOString().split('T')[0];
-    
-    healthData.push({
-      user_id: userId,
-      date: dateStr,
-      sleep_hours: (Math.random() * (9 - 5) + 5).toFixed(1), // 5 to 9 hours
-      steps: Math.floor(Math.random() * (12000 - 3000) + 3000) // 3k to 12k steps
-    });
-  }
-
-  console.log("Inserting Health Data...");
-  await supabase.from('health_metrics').upsert(healthData, { onConflict: 'user_id, date' });
-
-  // Generate 10 past Workouts over the last 14 days
-  console.log("Inserting Workout Sessions...");
-  for (let i = 10; i >= 1; i--) {
-    const template = templates[i % templates.length];
-    
-    // Spread the 10 workouts smoothly across the last 14 days 
-    const d = new Date();
-    d.setDate(d.getDate() - (i + Math.floor(i * 0.4))); 
-    
-    const { data: sessionData, error: sessErr } = await supabase.from('workout_sessions').insert({
-      user_id: userId,
-      template_id: template.id,
-      notes: "Mock data session",
-      created_at: d.toISOString()
-    }).select().single();
-
-    if (sessErr) {
-      console.error(sessErr);
-      continue;
-    }
-
-    // Give it 3 random exercises with 3 sets each, progressing slowly over time
-    const sets = [];
-    for (let exIdx = 0; exIdx < 3; exIdx++) {
-      const exercise = exercises[exIdx];
-      // Increase mock weight over time (10 -> 1 is older -> newer)
-      const baseWeight = 20 + (10 - i) * 2.5; 
-      
-      for (let s = 1; s <= 3; s++) {
-        sets.push({
-          user_id: userId,
-          session_id: sessionData.id,
-          exercise_id: exercise.id,
-          set_number: s,
-          reps: Math.floor(Math.random() * (12 - 8) + 8),
-          weight: baseWeight,
-          completed: true,
-          created_at: d.toISOString()
-        });
-      }
-    }
-
-    await supabase.from('logged_sets').insert(sets);
-  }
-
-  console.log("✅ Successfully injected 14 days of mock data!");
+  console.log("Wait! Because of Row Level Security (RLS), this script cannot insert workout sets without an active login session.");
+  console.log("Please check my instructions to run this from the app UI instead.");
+  process.exit(1);
 }
 
 injectMockData();

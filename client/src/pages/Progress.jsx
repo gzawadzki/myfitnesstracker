@@ -25,6 +25,48 @@ export default function Progress() {
   const chartData = buildChartData(selectedExUrlId);
   const selectedEx = db.exercises[selectedExUrlId];
 
+  // 1. Calculate Real Metric Cards Data
+  const totalWorkouts = db.sessions ? db.sessions.length : 0;
+  
+  const totalVolume = (db.sessions || []).reduce((acc, sess) => {
+    return acc + (sess.sets || []).reduce((sAcc, set) => sAcc + (Number(set.weight) * Number(set.reps)), 0);
+  }, 0);
+  const volumeTons = totalVolume > 0 ? (totalVolume / 1000).toFixed(1) : 0;
+
+  const sleepDays = (db.healthMetrics || []).filter(m => Number(m.sleep_hours) > 0);
+  const avgSleepDec = sleepDays.length > 0 
+    ? sleepDays.reduce((acc, m) => acc + Number(m.sleep_hours), 0) / sleepDays.length 
+    : 0;
+  const avgSleepH = Math.floor(avgSleepDec);
+  const avgSleepM = Math.round((avgSleepDec - avgSleepH) * 60);
+  const avgSleepStr = avgSleepDec > 0 ? `${avgSleepH}h ${avgSleepM}m` : '0h 0m';
+
+  // 2. Calculate Real Recovery Correlation
+  let wellRestedSets = [];
+  let tiredSets = [];
+
+  (db.sessions || []).forEach(sess => {
+    const sessDate = sess.created_at.split('T')[0];
+    const dayMetrics = db.healthMetrics?.find(m => m.date === sessDate);
+    const sleep = dayMetrics ? Number(dayMetrics.sleep_hours) : 0;
+    
+    const exSets = (sess.sets || []).filter(s => s.exercise_id === selectedExUrlId);
+    if (sleep >= 7.5) {
+      wellRestedSets.push(...exSets);
+    } else if (sleep > 0) {
+      tiredSets.push(...exSets);
+    }
+  });
+
+  const getAvgVolume = (sets) => sets.length > 0 ? sets.reduce((acc, s) => acc + (Number(s.weight) * Number(s.reps)), 0) / sets.length : 0;
+  const wellRestedVol = getAvgVolume(wellRestedSets);
+  const tiredVol = getAvgVolume(tiredSets);
+
+  let diffPercent = 0;
+  if (tiredVol > 0 && wellRestedVol > 0) {
+    diffPercent = Math.round(((wellRestedVol - tiredVol) / tiredVol) * 100);
+  }
+
   return (
     <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
       <header className="flex justify-between items-center mb-6">
@@ -39,15 +81,15 @@ export default function Progress() {
       <div className="flex gap-2 mb-6">
         <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
           <span className="text-xs text-muted">Workouts</span>
-          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-primary)' }}>18</div>
+          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-primary)' }}>{totalWorkouts}</div>
         </div>
         <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
           <span className="text-xs text-muted">Volume (T)</span>
-          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-secondary)' }}>42.5</div>
+          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-secondary)' }}>{volumeTons}</div>
         </div>
         <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
           <span className="text-xs text-muted">Avg Sleep</span>
-          <div className="h2 mt-1 mb-0 opacity-90">7h 10m</div>
+          <div className="h2 mt-1 mb-0 opacity-90 text-sm flex items-center justify-center font-bold">{avgSleepStr}</div>
         </div>
       </div>
 
@@ -101,15 +143,26 @@ export default function Progress() {
         <p className="text-sm text-secondary mb-3">
           Comparing your performance on {selectedEx?.name} against sleep metrics.
         </p>
-        <div className="flex items-center gap-3">
-          <div className="flex-1" style={{ height: '8px', background: 'var(--surface-color)', borderRadius: '4px', overflow: 'hidden' }}>
-            <div style={{ width: '85%', height: '100%', background: 'var(--success)' }}></div>
-          </div>
-          <span className="text-xs font-bold text-success">+12% Strength</span>
-        </div>
-        <p className="text-xs text-muted mt-2">
-          Your volume increases by an average of 12% on days following &gt;7.5h sleep.
-        </p>
+        
+        {wellRestedSets.length > 0 && tiredSets.length > 0 ? (
+          <>
+            <div className="flex items-center gap-3">
+              <div className="flex-1" style={{ height: '8px', background: 'var(--surface-color)', borderRadius: '4px', overflow: 'hidden' }}>
+                <div style={{ width: `${Math.min(100, Math.max(10, 50 + diffPercent))}%`, height: '100%', background: diffPercent >= 0 ? 'var(--success)' : 'var(--warning)' }}></div>
+              </div>
+              <span className={`text-xs font-bold ${diffPercent >= 0 ? 'text-success' : 'text-warning'}`}>
+                {diffPercent > 0 ? '+' : ''}{diffPercent}% Strength
+              </span>
+            </div>
+            <p className="text-xs text-muted mt-2">
+              Your volume averages {diffPercent > 0 ? `a ${diffPercent}% increase` : `a ${Math.abs(diffPercent)}% decrease`} on days following &gt;7.5h sleep vs poorly rested days.
+            </p>
+          </>
+        ) : (
+           <p className="text-xs text-muted mt-2 italic">
+              Keep logging both workouts and sleep! Need more data across well-rested and tired days to calculate statistically significant correlations.
+           </p>
+        )}
       </div>
 
     </div>
