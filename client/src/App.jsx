@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
-import { Home, LineChart, Activity, User, Plus, HeartPulse } from 'lucide-react';
+import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
 import NewWorkout from './pages/NewWorkout';
 import Progress from './pages/Progress';
 import Health from './pages/Health';
@@ -57,14 +57,16 @@ function Dashboard() {
   
   const sleep = todayMetrics.sleep_hours || 0;
   const steps = todayMetrics.steps || 0;
+  const weight = todayMetrics.weight || 0;
 
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
       try {
         setGoogleLoading(true);
-        const { steps: fitSteps, sleepHours: fitSleep } = await fetchGoogleFitData(tokenResponse.access_token);
+        const { steps: fitSteps, sleepHours: fitSleep, weightKg: fitWeight } = await fetchGoogleFitData(tokenResponse.access_token);
         if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
         if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
+        if (fitWeight > 0) await saveDailyHealthMetric(todayStr, 'weight', fitWeight);
         setIsGoogleConnected(true);
       } catch (err) {
         console.error("Failed to sync metrics from Google Fit:", err);
@@ -72,7 +74,7 @@ function Dashboard() {
         setGoogleLoading(false);
       }
     },
-    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read',
+    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
     onError: error => console.error('Login Failed:', error)
   });
   
@@ -99,21 +101,29 @@ function Dashboard() {
       </div>
 
       <div className="card mb-6 glass">
-        <h2 className="h3 flex justify-between items-center">
+        <h2 className="h3 flex justify-between items-center mb-2">
           Today's Readiness
-          {!isGoogleConnected ? (
-            <button 
-              className="badge text-xs px-2 py-1 cursor-pointer"
-              style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
-              onClick={() => loginGoogleFit()}
-              disabled={googleLoading}
-            >
-              {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
-            </button>
-          ) : (
-            <span className="badge badge-success text-xs">Live Fit Sync ✓</span>
-          )}
+          <div className="flex flex-col items-end gap-1">
+            {!isGoogleConnected ? (
+              <button 
+                className="badge text-xs px-2 py-1 cursor-pointer"
+                style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
+                onClick={() => loginGoogleFit()}
+                disabled={googleLoading}
+              >
+                {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
+              </button>
+            ) : (
+              <span className="badge badge-success text-[10px]">Fit Sync Active ✓</span>
+            )}
+          </div>
         </h2>
+        {/* Google Fit Deprecation Warning */}
+        <div className="flex items-center gap-2 mb-4 p-2 rounded text-xs text-warning" style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+          <AlertTriangle size={14} className="flex-shrink-0" />
+          <span>Google Fit sync will stop working in 2026. Manual entry is recommended.</span>
+        </div>
+
         <div className="flex justify-between mt-4">
           <div className="flex-col items-center flex-1 text-center" onClick={() => {
             const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 0);
@@ -133,11 +143,24 @@ function Dashboard() {
             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
           }}>
             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps ✎</span>
-            <div className="h2 mt-1 mb-1" style={{ color: steps >= 8000 ? 'var(--success)' : 'var(--warning)' }}>
+            <div className="h2 mt-1 mb-1" style={{ color: steps >= (db.preferences?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
               {steps.toLocaleString()}
             </div>
-            <span className={`badge ${steps >= 8000 ? 'badge-success' : ''}`} style={steps < 8000 ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
-              {steps >= 8000 ? 'Active' : 'Recovery'}
+            <span className={`badge ${steps >= (db.preferences?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (db.preferences?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+              {steps >= (db.preferences?.step_goal || 8000) ? 'Active' : 'Recovery'}
+            </span>
+          </div>
+          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+          <div className="flex-col items-center flex-1 text-center" onClick={() => {
+            const val = prompt("Enter today's weight (kg):", weight || 0);
+            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
+          }}>
+            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Weight ✎</span>
+            <div className="h2 mt-1 mb-1 text-white">
+              {weight > 0 ? `${weight}kg` : '--'}
+            </div>
+            <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
+              Log
             </span>
           </div>
         </div>
@@ -457,29 +480,58 @@ function Layout({ session }) {
           <Route path="/progress" element={<Progress />} />
           <Route path="/health" element={<Health />} />
           <Route path="/profile" element={
-            <div className="animate-fade-in p-4">
-              <h1 className="h1 mb-1">Profile</h1>
-              <p className="text-secondary mb-6">Manage your account and connections.</p>
+            <div className="animate-fade-in p-4 pb-20">
+              <div className="flex flex-col items-center justify-center text-center mt-6 mb-8">
+                <div style={{ padding: '4px', background: 'var(--gradient-main)', borderRadius: '50%', marginBottom: '16px' }}>
+                  <img src={`https://ui-avatars.com/api/?name=${session?.user?.email}&background=1a1a1f&color=fff&size=128`} alt="User Avatar" style={{ borderRadius: '50%', width: '96px', height: '96px', border: '4px solid var(--bg-color)' }} />
+                </div>
+                <h1 className="h2 mb-1">Athlete Profile</h1>
+                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)', fontSize: '0.85rem', padding: '4px 12px' }}>
+                  {session?.user?.email}
+                </span>
+              </div>
               
-              <div className="card glass mb-6 p-4">
-                <span className="text-xs text-muted block mb-1">Logged in as</span>
-                <span className="font-medium">{session?.user?.email || "Unknown User"}</span>
+              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
+                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
+                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
+                    <User size={16} /> Account Info
+                  </h3>
+                </div>
+                <div className="p-4 flex flex-col gap-4">
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted text-sm">Member Since</span>
+                    <span className="font-medium text-sm">{new Date(session?.user?.created_at).toLocaleDateString()}</span>
+                  </div>
+                  <div className="flex justify-between items-center">
+                    <span className="text-muted text-sm">Status</span>
+                    <span className="badge badge-success text-[10px]">Active Pro</span>
+                  </div>
+                </div>
+              </div>
+
+              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
+                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
+                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
+                    <Database size={16} /> Data Management
+                  </h3>
+                </div>
+                <div className="p-4">
+                  <p className="text-xs text-muted mb-4 line-clamp-2">Need testing data? Inject 14 days of realistic mock workouts, sleep, and steps into your analytics dashboard.</p>
+                  <button 
+                    className="btn w-full btn-secondary text-sm" 
+                    onClick={injectMockData}
+                  >
+                    Inject Test Analytics
+                  </button>
+                </div>
               </div>
               
               <button 
-                className="btn w-full mb-4" 
-                style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} 
-                onClick={injectMockData}
-              >
-                Inject Test Analytics (14 Days)
-              </button>
-
-              <button 
-                className="btn w-full text-warning" 
-                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--warning)' }} 
+                className="btn w-full flex justify-center items-center gap-2" 
+                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', padding: '12px' }} 
                 onClick={() => supabase.auth.signOut()}
               >
-                Sign Out
+                <LogOut size={18} /> Sign Out
               </button>
             </div>
           } />
