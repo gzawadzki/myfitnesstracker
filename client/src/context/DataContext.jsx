@@ -292,8 +292,34 @@ export function DataProvider({ children }) {
     return data;
   };
 
+  const createExercise = async (name) => {
+    const trimmed = name.trim();
+    if (!trimmed) throw new Error('Exercise name cannot be empty');
+    
+    // Generate a simple ID
+    const id = 'ex_' + trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
+    
+    // Check if already exists
+    if (db.exercises[id]) return { id, name: db.exercises[id].name };
+    
+    const { data, error } = await supabase
+      .from('exercises')
+      .insert([{ id, name: trimmed }])
+      .select()
+      .single();
+    if (error) throw error;
+    
+    // Update local context
+    setDb(prev => ({
+      ...prev,
+      exercises: { ...prev.exercises, [data.id]: { id: data.id, name: data.name } }
+    }));
+    
+    return data;
+  };
+
   return (
-    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric }}>
+    <DataContext.Provider value={{ db, loading, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric, createExercise }}>
       {children}
     </DataContext.Provider>
   );

@@ -7,7 +7,7 @@ import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
 
 export default function NewWorkout() {
-  const { db, saveWorkoutSession } = useData();
+  const { db, saveWorkoutSession, createExercise } = useData();
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
@@ -237,6 +237,19 @@ export default function NewWorkout() {
     setSwappedExercises(prev => ({ ...prev, [originalId]: newExerciseId }));
     setShowSwapModal(false);
     setSwapSearch('');
+  };
+
+  const handleCreateAndSwap = async () => {
+    const name = swapSearch.trim();
+    if (!name) return;
+    try {
+      const newEx = await createExercise(name);
+      handleSwap(newEx.id);
+      toast.success(`Created "${newEx.name}"`);
+    } catch (err) {
+      console.error(err);
+      toast.error('Failed to create exercise.');
+    }
   };
 
   const undoSwap = () => {
@@ -560,6 +573,15 @@ export default function NewWorkout() {
               ))}
               {filteredExercises.length === 0 && (
                 <p className="text-muted text-sm text-center p-4">No exercises match "{swapSearch}"</p>
+              )}
+              {swapSearch.trim() && !filteredExercises.some(ex => ex.name.toLowerCase() === swapSearch.trim().toLowerCase()) && (
+                <button
+                  className="w-full p-3 rounded mb-1 text-sm font-medium flex items-center justify-center gap-2"
+                  style={{ background: 'rgba(16, 185, 129, 0.1)', border: '1px solid rgba(16, 185, 129, 0.3)', color: 'var(--success)', cursor: 'pointer' }}
+                  onClick={handleCreateAndSwap}
+                >
+                  <Plus size={16} /> Create "{swapSearch.trim()}" & Swap
+                </button>
               )}
             </div>
           </div>
