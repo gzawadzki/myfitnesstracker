@@ -2,22 +2,22 @@
   "phases": [
     {
       "id": "phase_1",
-      "name": "Faza 1 (Tydz. 1-4)"
+      "name": "Phase 1 (Weeks 1-4)"
     },
     {
       "id": "phase_2",
-      "name": "Faza 2 (Tydz. 5-6)"
+      "name": "Phase 2 (Weeks 5-6)"
     },
     {
       "id": "phase_3",
-      "name": "Faza 3 (Tydz. 7-10)"
+      "name": "Phase 3 (Weeks 7-10)"
     }
   ],
   "workouts": [
     {
       "id": "w_1",
       "phaseId": "phase_1",
-      "name": "Trening A – Pełne Ciało (Poniedziałek)",
+      "name": "Workout A - Foundations & Strength (Monday)",
       "exercises": [
         {
           "exerciseId": "ex_1",
@@ -54,7 +54,7 @@
     {
       "id": "w_2",
       "phaseId": "phase_1",
-      "name": "Trening B – Pełne Ciało (Środa)",
+      "name": "Workout B - Hypertrophy & Volume (Wednesday)",
       "exercises": [
         {
           "exerciseId": "ex_7",
@@ -91,7 +91,7 @@
     {
       "id": "w_3",
       "phaseId": "phase_1",
-      "name": "Trening C – Pełne Ciało (Piątek)",
+      "name": "Workout C - Functional & Core (Friday)",
       "exercises": [
         {
           "exerciseId": "ex_13",
@@ -133,7 +133,7 @@
     {
       "id": "w_4",
       "phaseId": "phase_2",
-      "name": "Trening 1 – Góra A (Wtorek)",
+      "name": "Workout 1 - Upper Body A (Tuesday)",
       "exercises": [
         {
           "exerciseId": "ex_2",
@@ -170,7 +170,7 @@
     {
       "id": "w_5",
       "phaseId": "phase_2",
-      "name": "Trening 2 – Dół A (Środa)",
+      "name": "Workout 2 - Lower Body A (Wednesday)",
       "exercises": [
         {
           "exerciseId": "ex_1",
@@ -207,7 +207,7 @@
     {
       "id": "w_6",
       "phaseId": "phase_2",
-      "name": "Trening 3 – Góra B (Piątek)",
+      "name": "Workout 3 - Upper Body B (Friday)",
       "exercises": [
         {
           "exerciseId": "ex_14",
@@ -249,7 +249,7 @@
     {
       "id": "w_7",
       "phaseId": "phase_2",
-      "name": "Trening 4 – Dół B (Sobota)",
+      "name": "Workout 4 - Lower Body B (Saturday)",
       "exercises": [
         {
           "exerciseId": "ex_22",
@@ -281,7 +281,7 @@
     {
       "id": "w_8",
       "phaseId": "phase_3",
-      "name": "Trening 1 – Góra 1 · Wycisk Poziomy & Biceps (Wtorek)",
+      "name": "Workout 1 - Upper: Horizontal Press & Biceps (Tuesday)",
       "exercises": [
         {
           "exerciseId": "ex_2",
@@ -318,7 +318,7 @@
     {
       "id": "w_9",
       "phaseId": "phase_3",
-      "name": "Trening 2 – Dół 1 · Przysiad & Czworogłowe (Środa)",
+      "name": "Workout 2 - Lower: Squat & Quads (Wednesday)",
       "exercises": [
         {
           "exerciseId": "ex_1",
@@ -355,7 +355,7 @@
     {
       "id": "w_10",
       "phaseId": "phase_3",
-      "name": "Trening 3 – Góra 2 · Wycisk Pionowy & Biceps (Piątek)",
+      "name": "Workout 3 - Upper: Vertical Press & Biceps (Friday)",
       "exercises": [
         {
           "exerciseId": "ex_14",
@@ -397,7 +397,7 @@
     {
       "id": "w_11",
       "phaseId": "phase_3",
-      "name": "Trening 4 – Dół 2 · Martwy & Pośladki/Dwugłowe (Sobota)",
+      "name": "Workout 4 - Lower: Deadlift & Hamstrings (Saturday)",
       "exercises": [
         {
           "exerciseId": "ex_22",
