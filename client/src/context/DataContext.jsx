@@ -94,6 +94,7 @@ export function DataProvider({ children }) {
             // Add a history point if valid
             if (maxWeight > 0) {
               mappedDb.exercises[exId].history.push({
+                date: sess.created_at,
                 weight: maxWeight,
                 reps: avgReps
               });

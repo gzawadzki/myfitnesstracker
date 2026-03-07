@@ -8,6 +8,7 @@ export default function Progress() {
   const { db } = useData();
   const navigate = useNavigate();
   const [selectedExUrlId, setSelectedExUrlId] = useState('ex_1'); // Barbell Back Squat
+  const [xAxisMode, setXAxisMode] = useState('week');
   
   // We extract actual history data from the global db context to build the chart
   const buildChartData = (exerciseId) => {
@@ -16,6 +17,7 @@ export default function Progress() {
 
     return ex.history.map((h, i) => ({
       week: `Wk ${i + 1}`,
+      date: h.date ? new Date(h.date).toLocaleDateString(undefined, { month: 'short', day: 'numeric' }) : `Wk ${i + 1}`,
       weight: h.weight,
       volume: h.weight * h.reps,
       reps: h.reps
@@ -95,10 +97,9 @@ export default function Progress() {
 
       <h2 className="h3 mb-4">Exercise Progress</h2>
       
-      <div className="mb-4">
+      <div className="mb-4 flex items-center justify-between gap-2">
         <select 
-          className="w-full text-sm font-medium" 
-          style={{ width: '100%' }}
+          className="text-sm font-medium flex-1" 
           value={selectedExUrlId}
           onChange={e => setSelectedExUrlId(e.target.value)}
         >
@@ -106,6 +107,31 @@ export default function Progress() {
             <option key={ex.id} value={ex.id}>{ex.name}</option>
           ))}
         </select>
+        
+        <div className="flex rounded-md p-1" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
+          <button 
+            className="text-xs font-medium rounded-sm"
+            style={{ 
+              padding: '4px 12px',
+              background: xAxisMode === 'week' ? 'var(--accent-primary)' : 'transparent',
+              color: xAxisMode === 'week' ? '#fff' : 'var(--text-muted)'
+            }}
+            onClick={() => setXAxisMode('week')}
+          >
+            Week
+          </button>
+          <button 
+            className="text-xs font-medium rounded-sm"
+            style={{ 
+              padding: '4px 12px',
+              background: xAxisMode === 'date' ? 'var(--accent-primary)' : 'transparent',
+              color: xAxisMode === 'date' ? '#fff' : 'var(--text-muted)'
+            }}
+            onClick={() => setXAxisMode('date')}
+          >
+            Date
+          </button>
+        </div>
       </div>
 
       <div className="card glass mb-6" style={{ height: '300px', padding: 'var(--space-4) var(--space-2)' }}>
@@ -113,7 +139,7 @@ export default function Progress() {
           <ResponsiveContainer width="100%" height="100%">
             <LineChart data={chartData} margin={{ top: 5, right: 10, left: -20, bottom: 0 }}>
               <CartesianGrid strokeDasharray="3 3" stroke="var(--surface-border)" vertical={false} />
-              <XAxis dataKey="week" stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
+              <XAxis dataKey={xAxisMode} stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
               <YAxis stroke="var(--text-muted)" fontSize={12} tickLine={false} axisLine={false} />
               <Tooltip 
                 contentStyle={{ backgroundColor: 'var(--surface-color)', border: '1px solid var(--surface-border)', borderRadius: 'var(--radius-md)' }}
