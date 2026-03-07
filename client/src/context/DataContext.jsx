@@ -11,10 +11,14 @@ export function DataProvider({ children }) {
 
   useEffect(() => {
     let isMounted = true;
+    let focusDebounce = null;
 
-    async function loadData() {
+    async function loadData(isBackground = false) {
       try {
-        if (isMounted) setLoading(true);
+        // Only show loading skeleton on initial load, not background refetches.
+        // Setting loading=true on refetch unmounts all components, resetting
+        // their local state (timers, form inputs, etc.)
+        if (isMounted && !isBackground) setLoading(true);
 
         // Get current user for filtering user-specific tables
         const { data: userData } = await supabase.auth.getUser();
@@ -130,12 +134,16 @@ export function DataProvider({ children }) {
 
     loadData();
 
-    // BUG-09: Refresh data when user returns to the tab
-    const handleFocus = () => loadData();
+    // Refresh data when user returns to the tab (background, debounced)
+    const handleFocus = () => {
+      clearTimeout(focusDebounce);
+      focusDebounce = setTimeout(() => loadData(true), 500);
+    };
     window.addEventListener('focus', handleFocus);
 
     return () => {
       isMounted = false;
+      clearTimeout(focusDebounce);
       window.removeEventListener('focus', handleFocus);
     };
   }, []);
