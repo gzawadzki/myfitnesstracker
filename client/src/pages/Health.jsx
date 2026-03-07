@@ -60,17 +60,32 @@ export default function Health() {
       setError(null);
       
       let val;
-      if (type === 'sleep_hours') val = parseFloat(sleepInput);
-      else if (type === 'steps') val = parseInt(stepsInput);
-      else if (type === 'weight') val = parseFloat(weightInput);
-      
-      if (isNaN(val) || val <= 0) return;
+      if (type === 'sleep_hours') {
+        val = parseFloat(sleepInput);
+        if (isNaN(val) || val <= 0 || val > 24) {
+          setError('Sleep must be between 0 and 24 hours.');
+          return;
+        }
+      } else if (type === 'steps') {
+        val = parseInt(stepsInput);
+        if (isNaN(val) || val <= 0) {
+          setError('Steps must be a positive number.');
+          return;
+        }
+      } else if (type === 'weight') {
+        val = parseFloat(weightInput);
+        if (isNaN(val) || val < 20 || val > 500) {
+          setError('Weight must be between 20 and 500.');
+          return;
+        }
+      }
 
       await saveDailyHealthMetric(todayStr, type, val);
       
     } catch (err) {
       console.error(err);
-      setError("Failed to save metrics. Check connection.");
+      const msg = err?.message || err?.details || 'Failed to save metrics. Check connection.';
+      setError(msg);
     } finally {
       setSaving(false);
     }
@@ -111,7 +126,9 @@ export default function Health() {
 
   // Calculate Insights
   const calcAvg = (metrics, days, type) => {
-    const subset = metrics.slice(0, days).filter(m => m[type] !== null && m[type] !== undefined);
+    const cutoff = new Date();
+    cutoff.setDate(cutoff.getDate() - days);
+    const subset = metrics.filter(m => new Date(m.date) >= cutoff && m[type] !== null && m[type] !== undefined);
     if(subset.length === 0) return 0;
     const sum = subset.reduce((acc, m) => acc + Number(m[type]), 0);
     return sum / subset.length;

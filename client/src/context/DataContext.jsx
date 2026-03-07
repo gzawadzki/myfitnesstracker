@@ -10,9 +10,16 @@ export function DataProvider({ children }) {
   const [error, setError] = useState(null);
 
   useEffect(() => {
+    let isMounted = true;
+
     async function loadData() {
       try {
-        setLoading(true);
+        if (isMounted) setLoading(true);
+
+        // Get current user for filtering user-specific tables
+        const { data: userData } = await supabase.auth.getUser();
+        const userId = userData?.user?.id;
+        if (!userId) throw new Error("Not logged in");
 
         const { data: phasesData, error: phErr } = await supabase.from('phases').select('*').order('order_index');
         if (phErr) throw phErr;
@@ -26,13 +33,31 @@ export function DataProvider({ children }) {
         const { data: mappingsData, error: mErr } = await supabase.from('template_exercises').select('*').order('order_index');
         if (mErr) throw mErr;
 
-        const { data: latestSessionsData, error: sessErr } = await supabase.from('workout_sessions').select('*').order('created_at', { ascending: false }).limit(20);
+        const { data: latestSessionsData, error: sessErr } = await supabase
+          .from('workout_sessions')
+          .select('*')
+          .eq('user_id', userId)
+          .order('created_at', { ascending: false })
+          .limit(20);
         if (sessErr) throw sessErr;
 
-        const { data: loggedSetsData, error: setsErr } = await supabase.from('logged_sets').select('*').order('created_at');
-        if (setsErr) throw setsErr;
+        const sessionIds = latestSessionsData.map(s => s.id);
+        let loggedSetsData = [];
+        if (sessionIds.length > 0) {
+          const { data: setsData, error: setsErr } = await supabase
+            .from('logged_sets')
+            .select('*')
+            .in('session_id', sessionIds)
+            .order('created_at');
+          if (setsErr) throw setsErr;
+          loggedSetsData = setsData || [];
+        }
 
-        const { data: healthData, error: healthErr } = await supabase.from('health_metrics').select('*').order('date', { ascending: false });
+        const { data: healthData, error: healthErr } = await supabase
+          .from('health_metrics')
+          .select('*')
+          .eq('user_id', userId)
+          .order('date', { ascending: false });
         if (healthErr && !healthErr.message?.includes('schema cache') && healthErr.code !== '42P01') {
           throw healthErr; 
         }
@@ -49,21 +74,15 @@ export function DataProvider({ children }) {
             ...w,
             phaseId: w.phase_id,
             exercises: mappingsData.filter(m => m.workout_id === w.id).map(m => {
-              // Extract history from loggedSets for this template -> exercise
               const relevantSessions = latestSessionsData.filter(s => s.template_id === w.id);
               const history = [];
               if (relevantSessions.length > 0) {
-                // Find nearest previous session
                 const lastSessionId = relevantSessions[0].id;
                 const lastSessionSets = loggedSetsData.filter(set => set.session_id === lastSessionId && set.exercise_id === m.exercise_id);
-                // Create a history array
                 lastSessionSets.forEach(set => {
                   history.push({ reps: set.reps, weight: set.weight });
                 });
               }
-              
-              // Find all historical data for analytics (Progress charts want every previous session)
-              // For now, attach full history to the exercise globally so Progress can read it
               return {
                 exerciseId: m.exercise_id,
                 targetSets: m.target_sets,
@@ -78,8 +97,7 @@ export function DataProvider({ children }) {
           }, {})
         };
 
-        // Inject the full history across all sessions for the Progress Chart 
-        // We look at all past sets for a specific exercise and average/max them out per session
+        // Inject the full history across all sessions for the Progress Chart
         latestSessionsData.reverse().forEach((sess) => {
           const sessSets = loggedSetsData.filter(s => s.session_id === sess.id);
           const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
@@ -91,7 +109,6 @@ export function DataProvider({ children }) {
             
             if(!mappedDb.exercises[exId].history) mappedDb.exercises[exId].history = [];
             
-            // Add a history point if valid
             if (maxWeight > 0) {
               mappedDb.exercises[exId].history.push({
                 date: sess.created_at,
@@ -102,17 +119,25 @@ export function DataProvider({ children }) {
           });
         });
 
-        setDb(mappedDb);
+        if (isMounted) setDb(mappedDb);
       } catch (err) {
         console.error("Error loading Supabase data:", err);
-        setError(err.message);
+        if (isMounted) setError(err.message);
       } finally {
-        setLoading(false);
+        if (isMounted) setLoading(false);
       }
     }
 
     loadData();
-     
+
+    // BUG-09: Refresh data when user returns to the tab
+    const handleFocus = () => loadData();
+    window.addEventListener('focus', handleFocus);
+
+    return () => {
+      isMounted = false;
+      window.removeEventListener('focus', handleFocus);
+    };
   }, []);
 
   const saveWorkoutSession = async (templateId, setsData, notes, sleep, steps) => {
