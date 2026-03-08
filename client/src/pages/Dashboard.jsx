@@ -9,7 +9,7 @@ import { fetchGoogleFitData } from '../lib/googleFit';
 import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
-  const { db, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
+  const { db, loadData, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
   const toast = useToast();
   const [gfitToken, setGfitToken] = useState(null);
@@ -49,33 +49,90 @@ export default function Dashboard() {
     setGoogleLoading(true);
     setSyncStatus(null);
     try {
-      const { dailyResults, activitySessions } = await fetchGoogleFitData(token, 7);
-      console.log('[syncGoogleFit] Received results:', dailyResults);
-      
-      // 1. Sync daily health metrics
-      for (const day of dailyResults) {
-        if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
-        if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
-        if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
-        if (day.latestActivity) await saveDailyHealthMetric(day.date, 'latest_activity', day.latestActivity);
-        if (day.caloriesBurned > 0) await saveDailyHealthMetric(day.date, 'calories_burned', day.caloriesBurned);
+      // --- Smart delta sync ---
+      // Find the most recent date we already have health data for (excluding today,
+      // because today's data is always refreshed as it changes throughout the day).
+      const todayRawForSync = new Date();
+      const syncOffset = todayRawForSync.getTimezoneOffset() * 60000;
+      const todayForSync = new Date(todayRawForSync - syncOffset).toISOString().split('T')[0];
+
+      const existingDates = (db.healthMetrics || [])
+        .map(m => m.date)
+        .filter(d => d < todayForSync) // exclude today
+        .sort((a, b) => (a > b ? -1 : 1)); // descending
+
+      const lastSyncedDate = existingDates[0] || null; // e.g. '2026-03-07'
+
+      let daysBack;
+      if (!lastSyncedDate) {
+        // No prior data — first sync, fetch full 7 days
+        daysBack = 7;
+      } else {
+        // Calculate how many days since last synced date (not counting today)
+        const lastSyncedMs = new Date(lastSyncedDate + 'T00:00:00').getTime();
+        const todayMs = new Date(todayForSync + 'T00:00:00').getTime();
+        const daysSinceLast = Math.floor((todayMs - lastSyncedMs) / 86400000);
+
+        if (daysSinceLast <= 0) {
+          // Last sync was today — only fetch today (1 day)
+          daysBack = 1;
+        } else {
+          // Fetch from day after last sync through today
+          // +1 to include today itself, capped at 7 to avoid huge requests
+          daysBack = Math.min(daysSinceLast + 1, 7);
+        }
       }
 
-      // 2. Sync activity sessions as workouts
+      console.log(`[syncGoogleFit] lastSyncedDate=${lastSyncedDate}, daysBack=${daysBack}`);
+
+      const { dailyResults, activitySessions } = await fetchGoogleFitData(token, daysBack);
+
+      // Filter: only save days that are NEW (not yet in db) OR today (always refresh)
+      const existingDatesSet = new Set(existingDates);
+      const daysToSave = dailyResults.filter(day => day.date === todayForSync || !existingDatesSet.has(day.date));
+
+      console.log(`[syncGoogleFit] Total fetched: ${dailyResults.length}, saving: ${daysToSave.length} day(s)`);
+
+      // Batch upsert all health metrics in one go instead of N sequential calls
+      if (daysToSave.length > 0) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userId = currentSession?.user?.id;
+        if (!userId) throw new Error('Not logged in');
+
+        const upsertRows = daysToSave.map(day => ({
+          user_id: userId,
+          date: day.date,
+          ...(day.steps > 0 && { steps: day.steps }),
+          ...(day.sleepHours > 0 && { sleep_hours: day.sleepHours }),
+          ...(day.weightKg > 0 && { weight: day.weightKg }),
+          ...(day.latestActivity && { latest_activity: day.latestActivity }),
+          ...(day.caloriesBurned > 0 && { calories_burned: day.caloriesBurned }),
+        }));
+
+        const { error: upsertError } = await supabase
+          .from('health_metrics')
+          .upsert(upsertRows, { onConflict: 'user_id,date' });
+
+        if (upsertError) throw upsertError;
+
+        // Refresh local context so UI updates immediately
+        await loadData(true);
+      }
+
+      // Sync activity sessions as workouts (deduplication handled inside syncExternalSessions)
       if (activitySessions && activitySessions.length > 0) {
         await syncExternalSessions(activitySessions);
       }
 
-      console.log('[syncGoogleFit] All saves completed!');
       setSyncStatus('success');
-      toast.success('Google Fit synced');
+      const saved = daysToSave.length;
+      toast.success(saved > 0 ? `Google Fit synced (${saved} new day${saved > 1 ? 's' : ''})` : 'Already up to date');
       setTimeout(() => setSyncStatus(null), 3000);
     } catch (err) {
-      console.error("Google Fit sync failed:", err);
+      console.error('Google Fit sync failed:', err);
       setGfitToken(null);
       setIsGoogleConnected(false);
       setSyncStatus('error');
-      // Auto re-login if token expired (403/401)
       if (err.message === 'Unauthorized' || err.message === 'Forbidden') {
         toast.error('Token expired — reconnecting...');
         setTimeout(() => loginGoogleFit(), 500);
