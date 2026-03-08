@@ -50,13 +50,16 @@ export default function Dashboard() {
     setSyncStatus(null);
     try {
       const dailyResults = await fetchGoogleFitData(token, 7);
+      console.log('[syncGoogleFit] Received results:', dailyResults);
       for (const day of dailyResults) {
+        console.log(`[syncGoogleFit] Saving ${day.date}: steps=${day.steps}, cal=${day.caloriesBurned}, weight=${day.weightKg}, sleep=${day.sleepHours}`);
         if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
         if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
         if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
         if (day.heartRate) await saveDailyHealthMetric(day.date, 'heart_rate', day.heartRate);
         if (day.caloriesBurned > 0) await saveDailyHealthMetric(day.date, 'calories_burned', day.caloriesBurned);
       }
+      console.log('[syncGoogleFit] All saves completed!');
       setSyncStatus('success');
       toast.success('Google Fit synced');
       setTimeout(() => setSyncStatus(null), 3000);
