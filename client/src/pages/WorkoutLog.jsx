@@ -1,13 +1,16 @@
 import React, { useState } from 'react';
-import { Trash2 } from 'lucide-react';
+import { Trash2, Dumbbell } from 'lucide-react';
+import { Link } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function WorkoutLog() {
   const { db, deleteWorkoutSession } = useData();
   const toast = useToast();
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
+  const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
   const sessions = [...(db.sessions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
@@ -29,7 +32,14 @@ export default function WorkoutLog() {
 
       <div className="flex-col gap-3 mx-4">
         {sessions.length === 0 ? (
-          <div className="text-center text-muted text-sm mt-8">No workouts logged yet.</div>
+          <div className="card glass text-center p-8 mt-4">
+            <Dumbbell size={48} className="mx-auto mb-4" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+            <h3 className="h3 mb-2">No workouts yet</h3>
+            <p className="text-sm text-secondary mb-4">Complete your first session to see it here.</p>
+            <Link to="/workouts/select" className="btn btn-primary text-sm" style={{ display: 'inline-flex', padding: '10px 24px' }}>
+              Start a Workout
+            </Link>
+          </div>
         ) : (
           sessions.map(session => {
             const template = db.workouts && db.workouts.find(w => w.id === session.template_id);
@@ -67,18 +77,9 @@ export default function WorkoutLog() {
                     {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
                     <button 
                       className="p-1 text-muted hover:text-warning transition-colors"
-                      onClick={async (e) => {
+                      onClick={(e) => {
                         e.stopPropagation();
-                        if(window.confirm("Delete this workout session?")) {
-                          try {
-                            setDeletingId(session.id);
-                            await deleteWorkoutSession(session.id);
-                            toast.success('Workout deleted');
-                          } catch (err) {
-                            toast.error('Failed to delete: ' + err.message);
-                            setDeletingId(null);
-                          }
-                        }
+                        setConfirmDeleteId(session.id);
                       }}
                       disabled={deletingId === session.id}
                     >
@@ -187,6 +188,28 @@ export default function WorkoutLog() {
           })
         )}
       </div>
+
+      <ConfirmModal
+        open={!!confirmDeleteId}
+        title="Delete workout?"
+        message="This will permanently remove this session and all its sets. This cannot be undone."
+        confirmLabel="Delete"
+        variant="danger"
+        loading={!!deletingId}
+        onCancel={() => setConfirmDeleteId(null)}
+        onConfirm={async () => {
+          try {
+            setDeletingId(confirmDeleteId);
+            await deleteWorkoutSession(confirmDeleteId);
+            toast.success('Workout deleted');
+          } catch (err) {
+            toast.error('Failed to delete: ' + err.message);
+          } finally {
+            setDeletingId(null);
+            setConfirmDeleteId(null);
+          }
+        }}
+      />
     </div>
   );
 }

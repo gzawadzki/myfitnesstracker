@@ -5,6 +5,7 @@ import { ChevronLeft, Plus, Save, Play, Check, ArrowUp, ArrowDown, SkipForward, 
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useData } from '../context/DataContext';
 import { useToast } from '../components/Toast';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function NewWorkout() {
   const { db, saveWorkoutSession, createExercise } = useData();
@@ -68,6 +69,7 @@ export default function NewWorkout() {
   const [swappedExercises, setSwappedExercises] = useState({}); // { originalId: newExerciseId }
   const [showSwapModal, setShowSwapModal] = useState(false);
   const [swapSearch, setSwapSearch] = useState('');
+  const [showDiscardConfirm, setShowDiscardConfirm] = useState(false);
 
   // Sync exerciseOrder when baseExercises changes (e.g. on first load)
   useEffect(() => {
@@ -334,12 +336,14 @@ export default function NewWorkout() {
           </div>
         </div>
         <button className="btn btn-secondary text-sm" style={{ padding: '6px 12px' }} onClick={() => {
-          if (!hasData || window.confirm('Discard this workout?')) {
+          if (!hasData) {
             sessionStorage.removeItem('workoutStartTime');
             sessionStorage.removeItem('workoutSetsData');
             sessionStorage.removeItem('workoutComment');
             sessionStorage.removeItem('activeWorkoutId');
             navigate('/');
+          } else {
+            setShowDiscardConfirm(true);
           }
         }}>
           <X size={16} /> Cancel
@@ -622,6 +626,23 @@ export default function NewWorkout() {
       >
         {isLastExercise ? 'Review & Finish' : 'Next Exercise'}
       </button>
+
+      <ConfirmModal
+        open={showDiscardConfirm}
+        title="Discard workout?"
+        message="All your progress in this session will be lost."
+        confirmLabel="Discard"
+        variant="warning"
+        onCancel={() => setShowDiscardConfirm(false)}
+        onConfirm={() => {
+          sessionStorage.removeItem('workoutStartTime');
+          sessionStorage.removeItem('workoutSetsData');
+          sessionStorage.removeItem('workoutComment');
+          sessionStorage.removeItem('activeWorkoutId');
+          setShowDiscardConfirm(false);
+          navigate('/');
+        }}
+      />
     </div>
   );
 }

@@ -432,8 +432,10 @@ export default function Dashboard() {
           </Link>
         </div>
       ) : (
-        <div className="card text-center text-muted p-6">
-          No workouts available. Please import your training plan.
+        <div className="card glass text-center p-6">
+          <Activity size={40} className="mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+          <h3 className="h3 mb-2">No workouts available</h3>
+          <p className="text-sm text-secondary mb-0">Import your training plan to get started.</p>
         </div>
       )}
     </div>

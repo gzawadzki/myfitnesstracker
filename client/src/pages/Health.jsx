@@ -6,6 +6,7 @@ import GoalsForm from '../components/GoalsForm';
 import { formatWeightGoal, getGoalFormValues, hasIncompleteGoals } from '../components/goalsUtils';
 import { Moon, Footprints, AlertCircle, Save, Trash2, TrendingUp, Scale, Settings, Heart, Flame } from 'lucide-react';
 import { LineChart, Line, XAxis, YAxis, CartesianGrid, Tooltip, ResponsiveContainer } from 'recharts';
+import ConfirmModal from '../components/ConfirmModal';
 
 export default function Health() {
   const { db, saveDailyHealthMetric, deleteDailyHealthMetric, loadingHealth } = useData();
@@ -15,6 +16,7 @@ export default function Health() {
   const [deletingId, setDeletingId] = useState(null);
   const [error, setError] = useState(null);
   const [savedFields, setSavedFields] = useState({});
+  const [confirmDelete, setConfirmDelete] = useState(null); // { dateStr, type, label }
 
   // Get today's local date string
   const todayRaw = new Date();
@@ -107,9 +109,14 @@ export default function Health() {
   const recentMetrics = (db.healthMetrics || []).slice(0, 14);
   const formatShortDate = (iso) => new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric' });
 
-  const handleDelete = async (dateStr, type) => {
+  const handleDeleteRequest = (dateStr, type) => {
     const label = { sleep_hours: 'sleep', steps: 'step', weight: 'weight', heart_rate: 'heart rate', calories_burned: 'calories' }[type];
-    if (!window.confirm(`Delete ${label} record for ${formatShortDate(dateStr)}?`)) return;
+    setConfirmDelete({ dateStr, type, label });
+  };
+
+  const handleDeleteConfirm = async () => {
+    if (!confirmDelete) return;
+    const { dateStr, type, label } = confirmDelete;
     try {
       setDeletingId(`${dateStr}-${type}`);
       await deleteDailyHealthMetric(dateStr, type);
@@ -119,6 +126,7 @@ export default function Health() {
       setError("Failed to delete record.");
     } finally {
       setDeletingId(null);
+      setConfirmDelete(null);
     }
   };
 
@@ -165,7 +173,7 @@ export default function Health() {
             <span className="font-semibold flex items-center gap-2">
               {formatValue(m)}
               {formatBadge && formatBadge(m)}
-              <button className="p-1 text-muted hover:text-warning transition-colors" onClick={() => handleDelete(m.date, field)} disabled={deletingId === `${m.date}-${field}`}>
+              <button className="p-1 text-muted hover:text-warning transition-colors" onClick={() => handleDeleteRequest(m.date, field)} disabled={deletingId === `${m.date}-${field}`}>
                 <Trash2 size={12} />
               </button>
             </span>
@@ -434,6 +442,16 @@ export default function Health() {
         )}
       </div>
 
+      <ConfirmModal
+        open={!!confirmDelete}
+        title={`Delete ${confirmDelete?.label} record?`}
+        message={`Remove the ${confirmDelete?.label} record for ${confirmDelete ? formatShortDate(confirmDelete.dateStr) : ''}? This cannot be undone.`}
+        confirmLabel="Delete"
+        variant="danger"
+        loading={!!deletingId}
+        onCancel={() => setConfirmDelete(null)}
+        onConfirm={handleDeleteConfirm}
+      />
     </div>
   );
 }

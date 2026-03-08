@@ -254,8 +254,10 @@ export default function Progress() {
             </LineChart>
           </ResponsiveContainer>
         ) : (
-          <div className="flex h-full items-center justify-center text-muted text-sm">
-            No history data available for this exercise yet. Complete one workout containing {selectedEx?.name || 'this exercise'} to start seeing trends.
+          <div className="flex flex-col h-full items-center justify-center text-center px-4">
+            <div style={{ fontSize: '2.5rem', opacity: 0.3, marginBottom: '12px' }}>📊</div>
+            <p className="text-sm text-muted mb-1">No data for <strong>{selectedEx?.name || 'this exercise'}</strong></p>
+            <p className="text-xs text-secondary">Complete a workout with this exercise to start tracking progress.</p>
           </div>
         )}
       </div>
@@ -283,7 +285,7 @@ export default function Progress() {
           </>
         ) : (
            <p className="text-xs text-muted mt-2 italic">
-              Keep logging both workouts and sleep! Need more data across well-rested and tired days to calculate statistically significant correlations.
+              Log 5+ workouts and your sleep to see how rest affects your performance.
            </p>
         )}
       </div>
