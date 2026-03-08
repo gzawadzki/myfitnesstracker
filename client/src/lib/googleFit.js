@@ -48,7 +48,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   };
 
   const dayMap = {};
-  const activitySessions = []; // NEW: All workout-like activities
+  const activitySessionsMap = {}; // NEW: Use Map for de-duplication
   for (let i = 0; i <= daysBack; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -272,7 +272,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
           aggregateBy: [{ dataTypeName: 'com.google.weight' }],
           bucketByTime: { durationMillis: 86400000 },
           startTimeMillis,
-          endTimeMillis
+          endTimeMillis: rawEndTimeMillis
         })
       });
       if (resp.ok) {
@@ -304,7 +304,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
           aggregateBy: [{ dataTypeName: 'com.google.weight.summary' }],
           bucketByTime: { durationMillis: 86400000 },
           startTimeMillis,
-          endTimeMillis
+          endTimeMillis: rawEndTimeMillis
         })
       });
       if (resp.ok) {
@@ -495,7 +495,11 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
 
               // NEW: Collect as a session if it's Walk/Run and has significant time
               const startMs = parseInt(point.startTimeNanos) / 1000000;
-              const endMs = parseInt(point.endTimeNanos) / 1000000;
+              let endMs = parseInt(point.endTimeNanos) / 1000000;
+              
+              // Ensure positive duration to avoid 400 Bad Request
+              if (endMs <= startMs) endMs = startMs + 1000; 
+
               const durationMin = (endMs - startMs) / 60000;
               
               if ((typeId === 7 || typeId === 8) && durationMin >= 5) {
@@ -516,7 +520,9 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
                       endTimeMillis: endMs
                     })
                   });
-                  if (detailResp.ok) {
+                  if (detailResp.status === 403) {
+                    console.warn('[Google Fit] 403 Forbidden for distance/steps details. Check scopes.');
+                  } else if (detailResp.ok) {
                     const detailData = await detailResp.json();
                     const buckets = detailData.bucket || [];
                     if (buckets.length > 0) {
@@ -531,17 +537,21 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
                 // for now let's just use 4-8 kcal/min for Walk/Run
                 const kcalPerMin = typeId === 8 ? 10 : 4; 
                 const sessionCalories = Math.round(durationMin * kcalPerMin);
+                const sessionId = `gf-${startMs}`;
 
-                activitySessions.push({
-                  id: `gf-${startMs}`,
-                  startTime: new Date(startMs).toISOString(),
-                  endTime: new Date(endMs).toISOString(),
-                  type: activityName,
-                  durationMinutes: Math.round(durationMin),
-                  calories: sessionCalories,
-                  distanceMeters: Math.round(sessionDistance),
-                  steps: sessionSteps
-                });
+                // Only add if not already present or if we want to merge (keeping it simple: first one wins)
+                if (!activitySessionsMap[sessionId]) {
+                  activitySessionsMap[sessionId] = {
+                    id: sessionId,
+                    startTime: new Date(startMs).toISOString(),
+                    endTime: new Date(endMs).toISOString(),
+                    type: activityName,
+                    durationMinutes: Math.round(durationMin),
+                    calories: sessionCalories,
+                    distanceMeters: Math.round(sessionDistance),
+                    steps: sessionSteps
+                  };
+                }
               }
             }
           }
@@ -557,6 +567,8 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     const { _latestActivityMs, ...rest } = d;
     return rest;
   });
+
+  const activitySessions = Object.values(activitySessionsMap);
 
   console.log('[Google Fit Sync] Per-day results:', dailyResults.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0 || r.latestActivity));
   console.log('[Google Fit Sync] Found activity sessions:', activitySessions.length);
