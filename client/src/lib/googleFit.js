@@ -47,6 +47,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
         endTimeMillis
       })
     });
+    if (resp.status === 401) throw new Error('Unauthorized');
     if (resp.ok) {
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
@@ -134,29 +135,42 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   }
 
   // ─── 3. WEIGHT ──────────────────────────────────────────
-  // 1. Try raw merged data source to get exact chronological points (avoids bucket averaging)
+  // 1. Try raw data sources to get exact chronological points (avoids bucket averaging)
   try {
-    const resp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startTimeMillis}000000-${endTimeMillis}000000`, {
+    const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.weight', {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    if (resp.ok) {
-      const data = await resp.json();
-      for (const point of (data.point || [])) {
-        const pointMs = parseInt(point.endTimeNanos) / 1000000;
-        const dateKey = toDateStr(pointMs);
-        if (dayMap[dateKey]) {
-          const val = point.value?.[0]?.fpVal;
-          if (val) {
-            // Replace the bucket's weight if this weigh-in is more recent
-            if (!dayMap[dateKey]._maxWeightTime || pointMs >= dayMap[dateKey]._maxWeightTime) {
-              dayMap[dateKey].weightKg = Number(val.toFixed(1));
-              dayMap[dateKey]._maxWeightTime = pointMs;
+    if (dsResp.status === 401) throw new Error('Unauthorized');
+    
+    if (dsResp.ok) {
+      const dsData = await dsResp.json();
+      for (const source of (dsData.dataSource || [])) {
+        const streamId = encodeURIComponent(source.dataStreamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${endTimeMillis}000000`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (pointsResp.ok) {
+          const pointsData = await pointsResp.json();
+          for (const point of (pointsData.point || [])) {
+            const pointMs = parseInt(point.endTimeNanos) / 1000000;
+            const dateKey = toDateStr(pointMs);
+            if (dayMap[dateKey]) {
+              const val = point.value?.[0]?.fpVal;
+              if (val) {
+                // Replace the bucket's weight if this weigh-in is more recent
+                if (!dayMap[dateKey]._maxWeightTime || pointMs >= dayMap[dateKey]._maxWeightTime) {
+                  dayMap[dateKey].weightKg = Number(val.toFixed(1));
+                  dayMap[dateKey]._maxWeightTime = pointMs;
+                }
+              }
             }
           }
         }
       }
     }
   } catch (e) {
+    if (e.message === 'Unauthorized') throw e;
     console.warn('Google Fit raw weight error:', e);
   }
 
