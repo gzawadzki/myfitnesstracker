@@ -123,8 +123,15 @@ export default function WorkoutLog() {
                               <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{exName}</div>
                               <div className="flex flex-wrap gap-2">
                                 {exSets.map((s, i) => (
-                                  <div key={i} className="badge text-[10px]" style={{ padding: '2px 6px', background: s.completed ? 'var(--surface-color)' : 'rgba(239, 68, 68, 0.1)', color: s.completed ? 'var(--text-secondary)' : 'var(--warning)', border: '1px solid var(--surface-border)' }}>
-                                    {s.weight}kg x {s.reps} {!s.completed && '(Missed)'}
+                                  <div key={i} className="badge text-[10px]" style={{ 
+                                    padding: '2px 6px', 
+                                    background: s.is_warmup ? 'rgba(245, 158, 11, 0.08)' : s.completed ? 'var(--surface-color)' : 'rgba(239, 68, 68, 0.1)', 
+                                    color: s.is_warmup ? 'var(--warning)' : s.completed ? 'var(--text-secondary)' : 'var(--warning)', 
+                                    border: `1px solid ${s.is_warmup ? 'rgba(245, 158, 11, 0.25)' : 'var(--surface-border)'}`,
+                                    opacity: s.is_warmup ? 0.7 : 1
+                                  }}>
+                                    {s.is_warmup && <span style={{ marginRight: '2px', fontWeight: 700 }}>W</span>}
+                                    {s.weight}kg x {s.reps} {!s.completed && !s.is_warmup && '(Missed)'}
                                   </div>
                                 ))}
                               </div>
