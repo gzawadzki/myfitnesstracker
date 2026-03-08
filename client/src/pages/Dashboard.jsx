@@ -9,7 +9,7 @@ import { fetchGoogleFitData } from '../lib/googleFit';
 import { supabase } from '../lib/supabase';
 
 export default function Dashboard() {
-  const { db, saveDailyHealthMetric, loadingCatalog, loadingSessions, loadingHealth } = useData();
+  const { db, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
   const toast = useToast();
   const [gfitToken, setGfitToken] = useState(null);
@@ -49,16 +49,23 @@ export default function Dashboard() {
     setGoogleLoading(true);
     setSyncStatus(null);
     try {
-      const dailyResults = await fetchGoogleFitData(token, 7);
+      const { dailyResults, activitySessions } = await fetchGoogleFitData(token, 7);
       console.log('[syncGoogleFit] Received results:', dailyResults);
+      
+      // 1. Sync daily health metrics
       for (const day of dailyResults) {
-        console.log(`[syncGoogleFit] Saving ${day.date}: steps=${day.steps}, cal=${day.caloriesBurned}, weight=${day.weightKg}, sleep=${day.sleepHours}`);
         if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
         if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
         if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
         if (day.latestActivity) await saveDailyHealthMetric(day.date, 'latest_activity', day.latestActivity);
         if (day.caloriesBurned > 0) await saveDailyHealthMetric(day.date, 'calories_burned', day.caloriesBurned);
       }
+
+      // 2. Sync activity sessions as workouts
+      if (activitySessions && activitySessions.length > 0) {
+        await syncExternalSessions(activitySessions);
+      }
+
       console.log('[syncGoogleFit] All saves completed!');
       setSyncStatus('success');
       toast.success('Google Fit synced');

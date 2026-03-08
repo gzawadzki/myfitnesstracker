@@ -47,8 +47,8 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     return new Date(d - offset).toISOString().split('T')[0];
   };
 
-  // Build a map: date -> { steps, sleepHours, weightKg }
   const dayMap = {};
+  const activitySessions = []; // NEW: All workout-like activities
   for (let i = 0; i <= daysBack; i++) {
     const d = new Date();
     d.setDate(d.getDate() - i);
@@ -492,6 +492,21 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
                   current._latestActivityMs = pointMs;
                 }
               }
+
+              // NEW: Collect as a session if it's Walk/Run and has significant time
+              const startMs = parseInt(point.startTimeNanos) / 1000000;
+              const endMs = parseInt(point.endTimeNanos) / 1000000;
+              const durationMin = (endMs - startMs) / 60000;
+              
+              if ((typeId === 7 || typeId === 8) && durationMin >= 5) {
+                activitySessions.push({
+                  id: `gf-${startMs}`,
+                  startTime: new Date(startMs).toISOString(),
+                  endTime: new Date(endMs).toISOString(),
+                  type: activityName,
+                  durationMinutes: Math.round(durationMin)
+                });
+              }
             }
           }
         }
@@ -501,12 +516,14 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     console.warn('Google Fit activity fetch error:', e);
   }
 
-  const results = Object.values(dayMap).map(d => {
+  const dailyResults = Object.values(dayMap).map(d => {
     // Clean up internal tracking fields
     const { _latestActivityMs, ...rest } = d;
     return rest;
   });
 
-  console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0 || r.latestActivity));
-  return results;
+  console.log('[Google Fit Sync] Per-day results:', dailyResults.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0 || r.latestActivity));
+  console.log('[Google Fit Sync] Found activity sessions:', activitySessions.length);
+  
+  return { dailyResults, activitySessions };
 }

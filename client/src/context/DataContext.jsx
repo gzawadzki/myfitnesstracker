@@ -429,17 +429,72 @@ export function DataProvider({ children }) {
       .single();
     if (error) throw error;
     
-    // Update local context
-    setDb(prev => ({
-      ...prev,
-      exercises: { ...prev.exercises, [data.id]: { id: data.id, name: data.name } }
-    }));
+    setDb(prev => ({ ...prev, exercises: { ...prev.exercises, [data.id]: { ...data, history: [] } } }));
     
     return data;
   };
 
+  const syncExternalSessions = async (externalSessions) => {
+    if (!externalSessions || externalSessions.length === 0) return;
+    
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    const userId = currentSession?.user?.id;
+    if (!userId) return;
+
+    // Filter out what we already have in local state
+    const existingGfIds = new Set(db.sessions.filter(s => s.google_fit_session_id).map(s => s.google_fit_session_id));
+    const newSessions = externalSessions.filter(s => !existingGfIds.has(s.id));
+
+    if (newSessions.length === 0) return;
+
+    console.log(`[syncExternalSessions] Syncing ${newSessions.length} new sessions...`);
+
+    const sessionsToInsert = newSessions.map(s => ({
+      user_id: userId,
+      google_fit_session_id: s.id,
+      created_at: s.startTime,
+      duration_minutes: s.durationMinutes,
+      notes: `Synced from Google Fit: ${s.type}`,
+      template_id: null // No template for external auto-synced sessions
+    }));
+
+    const { data, error } = await supabase
+      .from('workout_sessions')
+      .upsert(sessionsToInsert, { onConflict: 'google_fit_session_id' })
+      .select();
+
+    if (error) {
+      console.error('[syncExternalSessions] Error:', error);
+      return;
+    }
+
+    if (data && data.length > 0) {
+      setDb(prev => {
+        const updatedSessions = [...data.map(s => ({ ...s, sets: [] })), ...prev.sessions];
+        // Sort by date descending
+        updatedSessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return { ...prev, sessions: updatedSessions };
+      });
+    }
+  };
+
   return (
-    <DataContext.Provider value={{ db, loading, appReady, loadingCatalog, loadingSessions, loadingHealth, error, saveWorkoutSession, saveDailyHealthMetric, deleteWorkoutSession, deleteDailyHealthMetric, createExercise }}>
+    <DataContext.Provider value={{
+      db,
+      loading,
+      appReady,
+      loadingCatalog,
+      loadingSessions,
+      loadingHealth,
+      error,
+      loadData,
+      saveWorkoutSession,
+      deleteWorkoutSession,
+      saveDailyHealthMetric,
+      deleteDailyHealthMetric,
+      createExercise,
+      syncExternalSessions
+    }}>
       {children}
     </DataContext.Provider>
   );
