@@ -499,12 +499,48 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
               const durationMin = (endMs - startMs) / 60000;
               
               if ((typeId === 7 || typeId === 8) && durationMin >= 5) {
+                // Fetch more details for this specific window
+                let sessionDistance = 0;
+                let sessionSteps = 0;
+
+                try {
+                  const detailResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                      aggregateBy: [
+                        { dataTypeName: 'com.google.distance.delta' },
+                        { dataTypeName: 'com.google.step_count.delta' }
+                      ],
+                      startTimeMillis: startMs,
+                      endTimeMillis: endMs
+                    })
+                  });
+                  if (detailResp.ok) {
+                    const detailData = await detailResp.json();
+                    const buckets = detailData.bucket || [];
+                    if (buckets.length > 0) {
+                      sessionDistance = buckets[0].dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
+                      sessionSteps = buckets[0].dataset?.[1]?.point?.[0]?.value?.[0]?.intVal || 0;
+                    }
+                  }
+                } catch (e) { console.warn('Detail fetch error:', e); }
+
+                // Estimate calories if not directly available (roughly duration * intensity)
+                // or just use a proportion of daily calories if we wanted to be complex
+                // for now let's just use 4-8 kcal/min for Walk/Run
+                const kcalPerMin = typeId === 8 ? 10 : 4; 
+                const sessionCalories = Math.round(durationMin * kcalPerMin);
+
                 activitySessions.push({
                   id: `gf-${startMs}`,
                   startTime: new Date(startMs).toISOString(),
                   endTime: new Date(endMs).toISOString(),
                   type: activityName,
-                  durationMinutes: Math.round(durationMin)
+                  durationMinutes: Math.round(durationMin),
+                  calories: sessionCalories,
+                  distanceMeters: Math.round(sessionDistance),
+                  steps: sessionSteps
                 });
               }
             }

@@ -431,6 +431,9 @@ export function DataProvider({ children }) {
       google_fit_session_id: s.id,
       created_at: s.startTime,
       duration_minutes: s.durationMinutes,
+      calories: s.calories,
+      distance_meters: s.distanceMeters,
+      steps: s.steps,
       notes: `Synced from Google Fit: ${s.type}`,
       template_id: null // No template for external auto-synced sessions
     }));

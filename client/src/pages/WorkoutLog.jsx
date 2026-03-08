@@ -54,10 +54,13 @@ export default function WorkoutLog() {
                   onClick={() => toggleExpand(session.id)}
                 >
                   <div>
-                    <h3 className="h3 mb-1 text-sm">{templateName}</h3>
+                    <h3 className="h3 mb-1 text-sm">
+                      {session.google_fit_session_id ? `Synced: ${session.notes?.replace('Synced from Google Fit: ', '') || 'Activity'}` : templateName}
+                    </h3>
                     <p className="text-xs text-muted">
                       {formatShortDate(session.created_at)}
                       {session.duration_minutes > 0 && <span className="ml-2">⏱ {session.duration_minutes} min</span>}
+                      {session.distance_meters > 0 && <span className="ml-2">📍 {(session.distance_meters / 1000).toFixed(2)} km</span>}
                     </p>
                   </div>
                   <div className="flex items-center gap-2">
@@ -96,17 +99,37 @@ export default function WorkoutLog() {
                       </div>
                     )}
 
-                    {(session.health_sleep_hours || session.health_steps) && (
-                      <div className="flex gap-2 mb-4">
+                    {(session.health_sleep_hours || session.health_steps || session.calories || session.distance_meters || session.steps) && (
+                      <div className="flex flex-wrap gap-2 mb-4">
                         {session.health_sleep_hours && (
                           <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
                             💤 {session.health_sleep_hours}h
                           </div>
                         )}
-                        {session.health_steps && (
+                        {session.health_steps && !session.google_fit_session_id && (
                           <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
                             👟 {session.health_steps.toLocaleString()}
                           </div>
+                        )}
+                        {/* Synced Activity Details */}
+                        {session.google_fit_session_id && (
+                          <>
+                            {session.steps > 0 && (
+                              <div className="badge text-xs" style={{ background: 'rgba(52, 211, 153, 0.1)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
+                                👟 {session.steps.toLocaleString()} steps
+                              </div>
+                            )}
+                            {session.distance_meters > 0 && (
+                              <div className="badge text-xs" style={{ background: 'rgba(96, 165, 250, 0.1)', color: '#60a5fa', border: '1px solid rgba(96, 165, 250, 0.2)' }}>
+                                📍 {(session.distance_meters / 1000).toFixed(2)} km
+                              </div>
+                            )}
+                            {session.calories > 0 && (
+                              <div className="badge text-xs" style={{ background: 'rgba(248, 113, 113, 0.1)', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
+                                🔥 {session.calories} kcal
+                              </div>
+                            )}
+                          </>
                         )}
                       </div>
                     )}
@@ -145,7 +168,7 @@ export default function WorkoutLog() {
                         })}
                       </div>
                     ) : (
-                      <div className="text-xs text-muted">No exercises recorded for this session.</div>
+                      !session.google_fit_session_id && <div className="text-xs text-muted">No exercises recorded for this session.</div>
                     )}
                   </div>
                 )}
