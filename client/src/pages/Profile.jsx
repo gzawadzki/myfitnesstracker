@@ -1,17 +1,20 @@
 import React, { useState } from 'react';
-import { User, HeartPulse, LogOut, Database, Download, X, Lock } from 'lucide-react';
+import { User, HeartPulse, LogOut, Database, Download, X, Lock, RefreshCw } from 'lucide-react';
 import { usePreferences } from '../hooks/usePreferences';
 import { useData } from '../context/DataContext';
 import { supabase } from '../lib/supabase';
 import { useToast } from '../components/Toast';
+import { useGoogleLogin } from '@react-oauth/google';
+import { fetchGoogleFitData } from '../lib/googleFit';
 import GoalsForm from '../components/GoalsForm';
 import { formatWeightGoal, hasIncompleteGoals } from '../components/goalsUtils';
 
 export default function ProfilePage({ session, injectMockData }) {
   const { preferences: prefs, loading: prefsLoading, savePreferences } = usePreferences();
-  const { db } = useData();
+  const { db, loadData, syncExternalSessions } = useData();
   const toast = useToast();
   const [downloading, setDownloading] = useState(false);
+  const [syncingGfit, setSyncingGfit] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
@@ -22,6 +25,54 @@ export default function ProfilePage({ session, injectMockData }) {
   React.useEffect(() => {
     if (prefs?.display_name) setDisplayName(prefs.display_name);
   }, [prefs?.display_name]);
+
+  const syncGoogleFit30Days = async (token) => {
+    setSyncingGfit(true);
+    try {
+      const { dailyResults, activitySessions } = await fetchGoogleFitData(token, 30);
+      
+      if (dailyResults.length > 0) {
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userId = currentSession?.user?.id;
+        if (!userId) throw new Error('Not logged in');
+
+        const upsertRows = dailyResults.map(day => ({
+          user_id: userId,
+          date: day.date,
+          ...(day.steps > 0 && { steps: day.steps }),
+          ...(day.sleepHours > 0 && { sleep_hours: day.sleepHours }),
+          ...(day.weightKg > 0 && { weight: day.weightKg }),
+          ...(day.latestActivity && { latest_activity: day.latestActivity }),
+          ...(day.caloriesBurned > 0 && { calories_burned: day.caloriesBurned }),
+        }));
+
+        const { error: upsertError } = await supabase
+          .from('health_metrics')
+          .upsert(upsertRows, { onConflict: 'user_id,date' });
+
+        if (upsertError) throw upsertError;
+      }
+
+      if (activitySessions && activitySessions.length > 0) {
+        await syncExternalSessions(activitySessions);
+      }
+
+      toast.success(`Synced 30 days of data and ${activitySessions?.length || 0} activities`);
+      await loadData(true);
+    } catch (err) {
+      console.error('30-day Google Fit sync failed:', err);
+      toast.error('Sync failed: ' + (err.message || 'Unknown error'));
+    } finally {
+      setSyncingGfit(false);
+    }
+  };
+
+  const loginGoogleFit30Days = useGoogleLogin({
+    onSuccess: (tokenResponse) => {
+      syncGoogleFit30Days(tokenResponse.access_token);
+    },
+    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.location.read',
+  });
 
   const downloadAllData = () => {
     if (!db) return;
@@ -285,6 +336,18 @@ export default function ProfilePage({ session, injectMockData }) {
           <p className="text-xs text-muted mb-3">Download all your workout sessions, health metrics, and exercise data as a CSV file.</p>
           <button className="btn w-full btn-secondary text-sm flex items-center justify-center gap-2" onClick={downloadAllData} disabled={downloading || !db}>
             <Download size={16} /> {downloading ? 'Preparing…' : 'Download CSV'}
+          </button>
+        </div>
+      </div>
+
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <RefreshCw size={14} /> Integrations
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-muted mb-3">Sync all health and activity data from Google Fit for the last 30 days. This may take a moment.</p>
+          <button className="btn w-full btn-secondary text-sm flex items-center justify-center gap-2" onClick={() => loginGoogleFit30Days()} disabled={syncingGfit}>
+            <RefreshCw size={16} className={syncingGfit ? "animate-spin" : ""} /> {syncingGfit ? 'Syncing 30 Days...' : 'Sync Last 30 Days'}
           </button>
         </div>
       </div>

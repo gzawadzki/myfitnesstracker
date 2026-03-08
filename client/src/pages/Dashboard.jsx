@@ -256,12 +256,7 @@ export default function Dashboard() {
             {syncStatus === 'error' && <span className="text-[10px] text-warning">Token expired — tap to reconnect</span>}
           </div>
         </h2>
-        {isGoogleConnected && (
-          <div className="flex items-center gap-2 mb-4 p-2 rounded text-xs text-warning" style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
-            <AlertTriangle size={14} className="flex-shrink-0" />
-            <span>Google Fit sync will stop working in 2026. Manual entry is recommended.</span>
-          </div>
-        )}
+
 
         <div className="flex justify-between mt-4">
           {/* Sleep */}

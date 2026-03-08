@@ -92,8 +92,8 @@ export default function Progress() {
   const exerciseOptions = Object.values(db.exercises || {}).sort((a, b) => a.name.localeCompare(b.name));
 
   // 1. Calculate Real Metric Cards Data
-  const totalWorkouts = db.sessions ? db.sessions.length : 0;
-  
+  const gymWorkouts = (db.sessions || []).filter(s => s.template_id !== null).length;
+  const cardioWorkouts = (db.sessions || []).filter(s => s.template_id === null).length;
   const totalVolume = (db.sessions || []).reduce((acc, sess) => {
     return acc + (sess.sets || [])
       .filter(set => !set.is_warmup)
@@ -158,17 +158,21 @@ export default function Progress() {
 
       {/* Metric Cards */}
       <div className="flex gap-2 mb-6">
-        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
-          <span className="text-xs text-muted">Workouts</span>
-          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-primary)' }}>{totalWorkouts}</div>
+        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-2)' }}>
+          <span className="text-[10px] text-muted uppercase tracking-wider">Gym</span>
+          <div className="h3 mt-1 mb-0" style={{ color: 'var(--accent-primary)' }}>{gymWorkouts}</div>
         </div>
-        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
-          <span className="text-xs text-muted">Volume (T)</span>
-          <div className="h2 mt-1 mb-0" style={{ color: 'var(--accent-secondary)' }}>{volumeTons}</div>
+        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-2)' }}>
+          <span className="text-[10px] text-muted uppercase tracking-wider">Cardio</span>
+          <div className="h3 mt-1 mb-0" style={{ color: '#10b981' }}>{cardioWorkouts}</div>
         </div>
-        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-3)' }}>
-          <span className="text-xs text-muted">Avg Sleep</span>
-          <div className="h2 mt-1 mb-0 opacity-90 text-sm flex items-center justify-center font-bold">{avgSleepStr}</div>
+        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-2)' }}>
+          <span className="text-[10px] text-muted uppercase tracking-wider">Vol (T)</span>
+          <div className="h3 mt-1 mb-0" style={{ color: 'var(--accent-secondary)' }}>{volumeTons}</div>
+        </div>
+        <div className="card glass flex-1 text-center" style={{ padding: 'var(--space-2)' }}>
+          <span className="text-[10px] text-muted uppercase tracking-wider">Sleep</span>
+          <div className="h3 mt-1 mb-0 opacity-90 text-xs flex items-center justify-center font-bold h-[28px]">{avgSleepStr}</div>
         </div>
       </div>
 
