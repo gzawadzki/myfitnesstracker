@@ -56,104 +56,63 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     dayMap[key] = { date: key, steps: 0, sleepHours: 0, weightKg: null, heartRate: null, caloriesBurned: 0, latestActivity: null };
   }
 
-  // ─── 1. STEPS ───────────────────────────────────────────
-  // 1a. Try raw data sources for real-time step counts (aggregate endpoint lags behind the app)
+  // 1a. Use aggregate endpoint as primary source (Google handles merging/deduplication)
   try {
-    const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
+        bucketByTime: { durationMillis: 86400000 },
+        startTimeMillis,
+        endTimeMillis: currentMillis
+      })
     });
-    if (dsResp.status === 401 || dsResp.status === 403) throw new Error(dsResp.status === 401 ? 'Unauthorized' : 'Forbidden');
-    
-    if (dsResp.ok) {
-      const dsData = await dsResp.json();
-      const sources = dsData.dataSource || [];
-      console.log('[Steps] Found', sources.length, 'step data sources');
-      
-      const stepsPerSource = {}; // { sourceId: { dateKey: steps } }
-
-      for (const source of sources) {
-        const streamId = source.dataStreamId;
-        const encodedId = encodeURIComponent(streamId);
-        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodedId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        
-        if (pointsResp.ok) {
-          const pointsData = await pointsResp.json();
-          stepsPerSource[streamId] = {};
-          
-          for (const point of (pointsData.point || [])) {
-            const pointMs = parseInt(point.endTimeNanos) / 1000000;
-            const dateKey = toDateStr(pointMs);
-            const val = point.value?.[0]?.intVal || 0;
-            if (val > 0) {
-              stepsPerSource[streamId][dateKey] = (stepsPerSource[streamId][dateKey] || 0) + val;
-            }
-          }
-        }
-      }
-
-      // De-duplicate: for each day, pick the "best" source
-      for (const dateKey of Object.keys(dayMap)) {
-        let bestValue = 0;
-        let foundPreferred = false;
-
-        for (const [streamId, sourceDays] of Object.entries(stepsPerSource)) {
-          const val = sourceDays[dateKey] || 0;
-          if (val <= 0) continue;
-
-          // Prefer merged/estimated sources
-          const isPreferred = streamId.toLowerCase().includes('estimated') || streamId.toLowerCase().includes('merge');
-          
-          if (isPreferred) {
-            if (!foundPreferred || val > bestValue) {
-              bestValue = val;
-              foundPreferred = true;
-            }
-          } else if (!foundPreferred) {
-            if (val > bestValue) {
-              bestValue = val;
-            }
-          }
-        }
-        
-        if (bestValue > 0) {
-          dayMap[dateKey].steps = bestValue;
-        }
+    if (resp.status === 401 || resp.status === 403) throw new Error(resp.status === 401 ? 'Unauthorized' : 'Forbidden');
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const bucket of (data.bucket || [])) {
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
+        if (dayMap[dateKey] && total > 0) dayMap[dateKey].steps = total;
       }
     }
   } catch (e) {
     if (e.message === 'Unauthorized' || e.message === 'Forbidden') throw e;
-    console.warn('Google Fit raw steps error:', e);
+    console.warn('Google Fit steps aggregate error:', e);
   }
 
-  // 1b. Fallback: aggregate if raw sources returned nothing
+  // 1b. Fallback: Try raw data sources if aggregate returned nothing for a day
   try {
-    const anyHasSteps = Object.values(dayMap).some(d => d.steps > 0);
-    if (!anyHasSteps) {
-      console.log('[Steps] Raw sources empty, falling back to aggregate...');
-      const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
-          bucketByTime: { durationMillis: 86400000 },
-          startTimeMillis,
-          endTimeMillis: currentMillis
-        })
+    const missingStepDays = Object.keys(dayMap).filter(k => dayMap[k].steps === 0);
+    if (missingStepDays.length > 0) {
+      const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
       });
-      if (resp.ok) {
-        const data = await resp.json();
-        for (const bucket of (data.bucket || [])) {
-          const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-          const points = bucket.dataset?.[0]?.point || [];
-          const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
-          if (dayMap[dateKey] && total > 0) dayMap[dateKey].steps = total;
+      if (dsResp.ok) {
+        const dsData = await dsResp.json();
+        const sources = dsData.dataSource || [];
+        for (const source of sources) {
+          const streamId = source.dataStreamId;
+          const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodeURIComponent(streamId)}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (pointsResp.ok) {
+            const pointsData = await pointsResp.json();
+            for (const point of (pointsData.point || [])) {
+              const dateKey = toDateStr(parseInt(point.endTimeNanos) / 1000000);
+              const val = point.value?.[0]?.intVal || 0;
+              if (val > 0 && dayMap[dateKey] && dayMap[dateKey].steps === 0) {
+                dayMap[dateKey].steps += val; // Only sum if we don't have better data
+              }
+            }
+          }
         }
       }
     }
   } catch (e) {
-    console.warn('Google Fit steps aggregate fallback error:', e);
+    console.warn('Google Fit raw steps error:', e);
   }
   console.log('[Steps] Final:', Object.entries(dayMap).map(([k,v]) => `${k}:${v.steps}`).join(', '));
 
@@ -353,101 +312,60 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     console.warn('Google Fit heart rate error (non-fatal):', e);
   }
 
-  // ─── 5. CALORIES ───────────────────────────────────────
-  // 5a. Try raw data sources for real-time calorie counts
+  // 5a. Use aggregate endpoint as primary source
   try {
-    const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.calories.expended', {
-      headers: { 'Authorization': `Bearer ${accessToken}` }
+    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+      method: 'POST',
+      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+      body: JSON.stringify({
+        aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
+        bucketByTime: { durationMillis: 86400000 },
+        startTimeMillis,
+        endTimeMillis: currentMillis
+      })
     });
-    if (dsResp.ok) {
-      const dsData = await dsResp.json();
-      const sources = dsData.dataSource || [];
-      console.log('[Calories] Found', sources.length, 'calorie data sources');
-      
-      const calsPerSource = {}; // { sourceId: { dateKey: calories } }
-
-      for (const source of sources) {
-        const streamId = source.dataStreamId;
-        const encodedId = encodeURIComponent(streamId);
-        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodedId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
-          headers: { 'Authorization': `Bearer ${accessToken}` }
-        });
-        
-        if (pointsResp.ok) {
-          const pointsData = await pointsResp.json();
-          calsPerSource[streamId] = {};
-          
-          for (const point of (pointsData.point || [])) {
-            const pointMs = parseInt(point.endTimeNanos) / 1000000;
-            const dateKey = toDateStr(pointMs);
-            const val = point.value?.[0]?.fpVal || 0;
-            if (val > 0) {
-              calsPerSource[streamId][dateKey] = (calsPerSource[streamId][dateKey] || 0) + val;
-            }
-          }
-        }
+    if (resp.ok) {
+      const data = await resp.json();
+      for (const bucket of (data.bucket || [])) {
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
+        if (dayMap[dateKey] && total > 0) dayMap[dateKey].caloriesBurned = Math.round(total);
       }
+    }
+  } catch (e) {
+    console.warn('Google Fit calories aggregate error:', e);
+  }
 
-      // De-duplicate: for each day, pick the "best" source
-      for (const dateKey of Object.keys(dayMap)) {
-        let bestValue = 0;
-        let foundPreferred = false;
-
-        for (const [streamId, sourceDays] of Object.entries(calsPerSource)) {
-          const val = sourceDays[dateKey] || 0;
-          if (val <= 0) continue;
-
-          // Prefer merged/estimated sources
-          const isPreferred = streamId.toLowerCase().includes('estimated') || streamId.toLowerCase().includes('merge');
-          
-          if (isPreferred) {
-            if (!foundPreferred || val > bestValue) {
-              bestValue = val;
-              foundPreferred = true;
-            }
-          } else if (!foundPreferred) {
-            if (val > bestValue) {
-              bestValue = val;
+  // 5b. Fallback: Try raw sources if aggregate missing
+  try {
+    const missingCalDays = Object.keys(dayMap).filter(k => dayMap[k].caloriesBurned === 0);
+    if (missingCalDays.length > 0) {
+      const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.calories.expended', {
+        headers: { 'Authorization': `Bearer ${accessToken}` }
+      });
+      if (dsResp.ok) {
+        const dsData = await dsResp.json();
+        const sources = dsData.dataSource || [];
+        for (const source of sources) {
+          const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodeURIComponent(source.dataStreamId)}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+            headers: { 'Authorization': `Bearer ${accessToken}` }
+          });
+          if (pointsResp.ok) {
+            const pointsData = await pointsResp.json();
+            for (const point of (pointsData.point || [])) {
+              const dateKey = toDateStr(parseInt(point.endTimeNanos) / 1000000);
+              const val = point.value?.[0]?.fpVal || 0;
+              if (val > 0 && dayMap[dateKey] && dayMap[dateKey].caloriesBurned === 0) {
+                dayMap[dateKey].caloriesBurned += val;
+              }
             }
           }
-        }
-        
-        if (bestValue > 0) {
-          dayMap[dateKey].caloriesBurned = bestValue;
         }
       }
     }
   } catch (e) {
     console.warn('Google Fit raw calories error:', e);
-  }
-
-  // 5b. Fallback: aggregate if raw sources returned nothing
-  try {
-    const anyHasCals = Object.values(dayMap).some(d => d.caloriesBurned > 0);
-    if (!anyHasCals) {
-      console.log('[Calories] Raw sources empty, falling back to aggregate...');
-      const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-        method: 'POST',
-        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-        body: JSON.stringify({
-          aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
-          bucketByTime: { durationMillis: 86400000 },
-          startTimeMillis,
-          endTimeMillis: currentMillis
-        })
-      });
-      if (resp.ok) {
-        const data = await resp.json();
-        for (const bucket of (data.bucket || [])) {
-          const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-          const points = bucket.dataset?.[0]?.point || [];
-          const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
-          if (dayMap[dateKey] && total > 0) dayMap[dateKey].caloriesBurned = Math.round(total);
-        }
-      }
-    }
-  } catch (e) {
-    console.warn('Google Fit calories aggregate fallback error:', e);
   }
 
   // Round all calories
@@ -514,29 +432,40 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
                     body: JSON.stringify({
                       aggregateBy: [
                         { dataTypeName: 'com.google.distance.delta' },
-                        { dataTypeName: 'com.google.step_count.delta' }
+                        { dataTypeName: 'com.google.step_count.delta' },
+                        { dataTypeName: 'com.google.calories.expended' }
                       ],
                       startTimeMillis: startMs,
                       endTimeMillis: endMs
                     })
                   });
                   if (detailResp.status === 403) {
-                    console.warn('[Google Fit] 403 Forbidden for distance/steps details. Check scopes.');
+                    console.warn('[Google Fit] 403 Forbidden for session details. Check scopes.');
                   } else if (detailResp.ok) {
                     const detailData = await detailResp.json();
                     const buckets = detailData.bucket || [];
-                    if (buckets.length > 0) {
-                      sessionDistance = buckets[0].dataset?.[0]?.point?.[0]?.value?.[0]?.fpVal || 0;
-                      sessionSteps = buckets[0].dataset?.[1]?.point?.[0]?.value?.[0]?.intVal || 0;
+                    for (const bucket of buckets) {
+                      const datasets = bucket.dataset || [];
+                      // Sum distance
+                      const distPoints = datasets[0]?.point || [];
+                      sessionDistance += distPoints.reduce((s, p) => s + (p.value?.[0]?.fpVal || 0), 0);
+                      // Sum steps
+                      const stepPoints = datasets[1]?.point || [];
+                      sessionSteps += stepPoints.reduce((s, p) => s + (p.value?.[0]?.intVal || 0), 0);
+                      // Sum calories
+                      const calPoints = datasets[2]?.point || [];
+                      sessionCalories += calPoints.reduce((s, p) => s + (p.value?.[0]?.fpVal || 0), 0);
                     }
                   }
                 } catch (e) { console.warn('Detail fetch error:', e); }
 
-                // Estimate calories if not directly available (roughly duration * intensity)
-                // or just use a proportion of daily calories if we wanted to be complex
-                // for now let's just use 4-8 kcal/min for Walk/Run
-                const kcalPerMin = typeId === 8 ? 10 : 4; 
-                const sessionCalories = Math.round(durationMin * kcalPerMin);
+                // Fallback estimate if API returned 0 calories but we have duration
+                if (sessionCalories === 0 && durationMin > 0) {
+                  const kcalPerMin = typeId === 8 ? 10 : 4; 
+                  sessionCalories = Math.round(durationMin * kcalPerMin);
+                }
+                
+                sessionCalories = Math.round(sessionCalories);
                 const sessionId = `gf-${startMs}`;
 
                 // Only add if not already present or if we want to merge (keeping it simple: first one wins)
