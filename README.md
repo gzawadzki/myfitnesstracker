@@ -12,6 +12,7 @@ An advanced, cloud-synchronized workout logger and analytics dashboard. Replaces
 - **Exercise Swap & Skip** — Substitute exercises on the fly or skip unavailable ones
 - **Session Notes** — Add free-text comments to any workout session
 - **Workout Log** — Full history of completed sessions with duration, sets, and notes
+- **Cardio Tracking** — Dedicated syncing and timeline views for non-gym cardio activities
 
 ### 📊 Health Metrics
 - **Sleep Tracking** — Log daily sleep hours, view 7d/30d averages and goal streaks
@@ -66,8 +67,12 @@ An advanced, cloud-synchronized workout logger and analytics dashboard. Replaces
 │   ├── 05_rls_catalog_tables.sql
 │   ├── 06_heart_rate_calories.sql    # Heart rate + calories columns
 │   ├── 07_workout_duration.sql       # Workout duration column
-│   ├── seed.js                # Excel → SQL parser
-│   └── seed_supabase.mjs      # Direct Supabase seeder
+│   ├── 08_exercises_insert_policy.sql
+│   ├── 09_latest_activity.sql
+│   ├── 10_gf_session_id.sql
+│   ├── 11_gf_session_details.sql
+│   ├── 12_cardio_sessions.sql        # Cardio isolation table
+│   └── add_warmup_column.sql
 ```
 
 ---
@@ -76,7 +81,6 @@ An advanced, cloud-synchronized workout logger and analytics dashboard. Replaces
 
 ### 1. Install Dependencies
 ```bash
-npm install          # Root (spreadsheet parser)
 cd client && npm install  # React app
 ```
 
@@ -91,7 +95,8 @@ VITE_GOOGLE_CLIENT_ID=your_google_cloud_oauth_id
 ### 3. Initialize Database
 Run the SQL migrations in order in the Supabase SQL Editor:
 1. `supabase_init.sql`
-2. `02_health_metrics.sql` → `07_workout_duration.sql`
+2. `02_health_metrics.sql` → `12_cardio_sessions.sql`
+3. `add_warmup_column.sql`
 
 ### 4. Start the App
 ```bash
@@ -99,13 +104,7 @@ cd client
 npm run dev
 ```
 
----
 
-## 🔒 Security Notes
-
-**`xlsx` audit warning**: The `xlsx` package may flag a prototype pollution vulnerability. It's only used as a developer-side one-off script (`database/seed.js`) and is **not** shipped to the production bundle.
-
----
 
 ## 📱 Tech Stack
 
