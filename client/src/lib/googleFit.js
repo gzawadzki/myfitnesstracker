@@ -424,6 +424,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
                 // Fetch more details for this specific window
                 let sessionDistance = 0;
                 let sessionSteps = 0;
+                let sessionCalories = 0;
 
                 try {
                   const detailResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
