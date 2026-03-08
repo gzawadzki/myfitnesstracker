@@ -494,8 +494,8 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
               }
 
               // NEW: Collect as a session if it's Walk/Run and has significant time
-              const startMs = parseInt(point.startTimeNanos) / 1000000;
-              let endMs = parseInt(point.endTimeNanos) / 1000000;
+              const startMs = Math.floor(parseInt(point.startTimeNanos) / 1000000);
+              let endMs = Math.floor(parseInt(point.endTimeNanos) / 1000000);
               
               // Ensure positive duration to avoid 400 Bad Request
               if (endMs <= startMs) endMs = startMs + 1000; 

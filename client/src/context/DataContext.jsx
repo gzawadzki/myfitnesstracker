@@ -418,9 +418,14 @@ export function DataProvider({ children }) {
     const userId = currentSession?.user?.id;
     if (!userId) return;
 
-    // Filter out what we already have in local state
+    // 1. Extra defensive de-duplication of incoming sessions (Map keeps only one per ID)
+    const uniqueMap = {};
+    externalSessions.forEach(s => { if (s.id) uniqueMap[s.id] = s; });
+    const uniqueInputSessions = Object.values(uniqueMap);
+
+    // 2. Filter out what we already have in local state
     const existingGfIds = new Set(db.sessions.filter(s => s.google_fit_session_id).map(s => s.google_fit_session_id));
-    const newSessions = externalSessions.filter(s => !existingGfIds.has(s.id));
+    const newSessions = uniqueInputSessions.filter(s => !existingGfIds.has(s.id));
 
     if (newSessions.length === 0) return;
 
