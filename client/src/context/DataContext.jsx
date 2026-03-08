@@ -160,12 +160,17 @@ export function DataProvider({ children }) {
 
     async function loadData(isBackground = false) {
       try {
+        const hasCache = db.sessions.length > 0 || Object.keys(db.exercises).length > 0;
+
         if (isMounted && !isBackground) {
           setError(null);
-          setLoading(true);
-          setLoadingCatalog(true);
-          setLoadingSessions(true);
-          setLoadingHealth(true);
+          // Only show full loading spinner if we don't have any data yet
+          if (!hasCache) {
+            setLoading(true);
+            setLoadingCatalog(true);
+            setLoadingSessions(true);
+            setLoadingHealth(true);
+          }
         }
 
         // Get current user session (getSession is local and fast, works offline)
@@ -195,9 +200,7 @@ export function DataProvider({ children }) {
         const healthPromise = fetchHealthMetrics(userId).finally(() => {
           if (isMounted) setLoadingHealth(false);
         });
-
         const [catalog, sessions, healthMetrics] = await Promise.all([catalogPromise, sessionsPromise, healthPromise]);
-
         const mappedDb = buildMappedDb(catalog, sessions, healthMetrics);
 
         if (isMounted) {
@@ -205,17 +208,38 @@ export function DataProvider({ children }) {
           setDb(mappedDb);
         }
       } catch (err) {
-        const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError' || err.code === 'PGRST102';
+        const msg = (err?.message || "").toLowerCase();
+        const errName = (err?.name || "").toLowerCase();
+        
+        const isNetworkError = 
+          msg.includes('fetch') || 
+          msg.includes('network') ||
+          msg.includes('load failed') ||
+          msg.includes('cors') ||
+          errName.includes('typeerror') || 
+          err?.code === 'PGRST102' ||
+          err?.code === 'FETCH_ERROR' ||
+          !navigator.onLine;
+
         console.error("Error loading Supabase data:", err);
         
         if (isMounted) {
-          // If we have cached data and it's a network error, don't break the UI
-          const hasCache = db.sessions.length > 0 || Object.keys(db.exercises).length > 0;
+          // Robust cache check
+          const hasCache = (db.sessions && db.sessions.length > 0) || 
+                          (db.exercises && Object.keys(db.exercises).length > 0) || 
+                          !!localStorage.getItem('fitnotes_db');
+          
           if (isNetworkError && hasCache) {
             console.log("Offline mode: Using cached data due to network error.");
             setError(null);
+            // Ensure app is marked as ready even if refresh failed
+            setAppReady(true);
+            setLoading(false);
+            setLoadingCatalog(false);
+            setLoadingSessions(false);
+            setLoadingHealth(false);
           } else {
-            setError(err.message);
+            setError(err?.message || "Unknown connection error");
           }
         }
       } finally {
