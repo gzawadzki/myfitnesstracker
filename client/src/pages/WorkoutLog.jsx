@@ -116,7 +116,12 @@ export default function WorkoutLog() {
                         {Object.keys(setsByExercise).map(exId => {
                           const exInfo = db.exercises[exId];
                           const exName = exInfo ? exInfo.name : exId;
-                          const exSets = setsByExercise[exId];
+                          const exSets = [...setsByExercise[exId]].sort((a, b) => {
+                            // Warmup sets first, then working sets, preserving original order within each group
+                            if (a.is_warmup && !b.is_warmup) return -1;
+                            if (!a.is_warmup && b.is_warmup) return 1;
+                            return (a.set_number || 0) - (b.set_number || 0);
+                          });
                           
                           return (
                             <div key={exId}>
