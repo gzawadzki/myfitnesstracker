@@ -46,22 +46,59 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     
     if (dsResp.ok) {
       const dsData = await dsResp.json();
-      console.log('[Steps] Found', (dsData.dataSource || []).length, 'step data sources');
-      for (const source of (dsData.dataSource || [])) {
-        const streamId = encodeURIComponent(source.dataStreamId);
-        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+      const sources = dsData.dataSource || [];
+      console.log('[Steps] Found', sources.length, 'step data sources');
+      
+      const stepsPerSource = {}; // { sourceId: { dateKey: steps } }
+
+      for (const source of sources) {
+        const streamId = source.dataStreamId;
+        const encodedId = encodeURIComponent(streamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodedId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
+        
         if (pointsResp.ok) {
           const pointsData = await pointsResp.json();
+          stepsPerSource[streamId] = {};
+          
           for (const point of (pointsData.point || [])) {
             const pointMs = parseInt(point.endTimeNanos) / 1000000;
             const dateKey = toDateStr(pointMs);
             const val = point.value?.[0]?.intVal || 0;
-            if (dayMap[dateKey] && val > 0) {
-              dayMap[dateKey].steps += val;
+            if (val > 0) {
+              stepsPerSource[streamId][dateKey] = (stepsPerSource[streamId][dateKey] || 0) + val;
             }
           }
+        }
+      }
+
+      // De-duplicate: for each day, pick the "best" source
+      for (const dateKey of Object.keys(dayMap)) {
+        let bestValue = 0;
+        let foundPreferred = false;
+
+        for (const [streamId, sourceDays] of Object.entries(stepsPerSource)) {
+          const val = sourceDays[dateKey] || 0;
+          if (val <= 0) continue;
+
+          // Prefer merged/estimated sources
+          const isPreferred = streamId.toLowerCase().includes('estimated') || streamId.toLowerCase().includes('merge');
+          
+          if (isPreferred) {
+            if (!foundPreferred || val > bestValue) {
+              bestValue = val;
+              foundPreferred = true;
+            }
+          } else if (!foundPreferred) {
+            if (val > bestValue) {
+              bestValue = val;
+            }
+          }
+        }
+        
+        if (bestValue > 0) {
+          dayMap[dateKey].steps = bestValue;
         }
       }
     }
@@ -304,22 +341,59 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     });
     if (dsResp.ok) {
       const dsData = await dsResp.json();
-      console.log('[Calories] Found', (dsData.dataSource || []).length, 'calorie data sources');
-      for (const source of (dsData.dataSource || [])) {
-        const streamId = encodeURIComponent(source.dataStreamId);
-        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+      const sources = dsData.dataSource || [];
+      console.log('[Calories] Found', sources.length, 'calorie data sources');
+      
+      const calsPerSource = {}; // { sourceId: { dateKey: calories } }
+
+      for (const source of sources) {
+        const streamId = source.dataStreamId;
+        const encodedId = encodeURIComponent(streamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodedId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
+        
         if (pointsResp.ok) {
           const pointsData = await pointsResp.json();
+          calsPerSource[streamId] = {};
+          
           for (const point of (pointsData.point || [])) {
             const pointMs = parseInt(point.endTimeNanos) / 1000000;
             const dateKey = toDateStr(pointMs);
             const val = point.value?.[0]?.fpVal || 0;
-            if (dayMap[dateKey] && val > 0) {
-              dayMap[dateKey].caloriesBurned += val;
+            if (val > 0) {
+              calsPerSource[streamId][dateKey] = (calsPerSource[streamId][dateKey] || 0) + val;
             }
           }
+        }
+      }
+
+      // De-duplicate: for each day, pick the "best" source
+      for (const dateKey of Object.keys(dayMap)) {
+        let bestValue = 0;
+        let foundPreferred = false;
+
+        for (const [streamId, sourceDays] of Object.entries(calsPerSource)) {
+          const val = sourceDays[dateKey] || 0;
+          if (val <= 0) continue;
+
+          // Prefer merged/estimated sources
+          const isPreferred = streamId.toLowerCase().includes('estimated') || streamId.toLowerCase().includes('merge');
+          
+          if (isPreferred) {
+            if (!foundPreferred || val > bestValue) {
+              bestValue = val;
+              foundPreferred = true;
+            }
+          } else if (!foundPreferred) {
+            if (val > bestValue) {
+              bestValue = val;
+            }
+          }
+        }
+        
+        if (bestValue > 0) {
+          dayMap[dateKey].caloriesBurned = bestValue;
         }
       }
     }

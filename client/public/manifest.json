@@ -1,1 +1,18 @@
-{\n  "name": "FitNotes",\n  "short_name": "FitNotes",\n  "description": "Track your workouts, health metrics, and fitness progress",\n  "start_url": "/",\n  "display": "standalone",\n  "background_color": "#0F172A",\n  "theme_color": "#3B82F6",\n  "orientation": "portrait",\n  "icons": [\n    {\n      "src": "/icon-512.png",\n      "sizes": "512x512",\n      "type": "image/png",\n      "purpose": "any maskable"\n    }\n  ]\n}
+{
+  "name": "FitNotes",
+  "short_name": "FitNotes",
+  "description": "Track your workouts, health metrics, and fitness progress",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#0F172A",
+  "theme_color": "#3B82F6",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ]
+}
