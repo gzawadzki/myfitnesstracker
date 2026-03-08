@@ -37,39 +37,68 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   }
 
   // ─── 1. STEPS ───────────────────────────────────────────
+  // 1a. Try raw data sources for real-time step counts (aggregate endpoint lags behind the app)
   try {
-    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
-        bucketByTime: { durationMillis: 86400000 },
-        startTimeMillis,
-        endTimeMillis: currentMillis
-      })
+    const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.step_count.delta', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    if (resp.status === 401 || resp.status === 403) throw new Error(resp.status === 401 ? 'Unauthorized' : 'Forbidden');
-    if (resp.ok) {
-      console.log('--- STEPS SYNC RAW DATA ---');
-      const data = await resp.json();
-      for (const bucket of (data.bucket || [])) {
-        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-        const points = bucket.dataset?.[0]?.point || [];
-        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
-        
-        console.log(`Step Bucket | StartMs: ${bucket.startTimeMillis} | LocalDate: ${dateKey} | Total Points: ${points.length} | Sum: ${total}`);
-        
-        if (dayMap[dateKey] && total > 0) {
-          dayMap[dateKey].steps = total;
+    if (dsResp.status === 401 || dsResp.status === 403) throw new Error(dsResp.status === 401 ? 'Unauthorized' : 'Forbidden');
+    
+    if (dsResp.ok) {
+      const dsData = await dsResp.json();
+      console.log('[Steps] Found', (dsData.dataSource || []).length, 'step data sources');
+      for (const source of (dsData.dataSource || [])) {
+        const streamId = encodeURIComponent(source.dataStreamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (pointsResp.ok) {
+          const pointsData = await pointsResp.json();
+          for (const point of (pointsData.point || [])) {
+            const pointMs = parseInt(point.endTimeNanos) / 1000000;
+            const dateKey = toDateStr(pointMs);
+            const val = point.value?.[0]?.intVal || 0;
+            if (dayMap[dateKey] && val > 0) {
+              dayMap[dateKey].steps += val;
+            }
+          }
         }
       }
-      console.log('--- END STEPS SYNC ---');
-    } else {
-      console.error('Google Fit steps fetch failed:', await resp.text());
     }
   } catch (e) {
-    console.error('Google Fit steps error:', e);
+    if (e.message === 'Unauthorized' || e.message === 'Forbidden') throw e;
+    console.warn('Google Fit raw steps error:', e);
   }
+
+  // 1b. Fallback: aggregate if raw sources returned nothing
+  try {
+    const anyHasSteps = Object.values(dayMap).some(d => d.steps > 0);
+    if (!anyHasSteps) {
+      console.log('[Steps] Raw sources empty, falling back to aggregate...');
+      const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
+          bucketByTime: { durationMillis: 86400000 },
+          startTimeMillis,
+          endTimeMillis: currentMillis
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const bucket of (data.bucket || [])) {
+          const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+          const points = bucket.dataset?.[0]?.point || [];
+          const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
+          if (dayMap[dateKey] && total > 0) dayMap[dateKey].steps = total;
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit steps aggregate fallback error:', e);
+  }
+  console.log('[Steps] Final:', Object.entries(dayMap).map(([k,v]) => `${k}:${v.steps}`).join(', '));
 
   // ─── 2. SLEEP ───────────────────────────────────────────
   // Try sessions endpoint first (activity types: 72=sleep, 109=light, 110=deep, 111=REM, 112=awake)
@@ -268,36 +297,70 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   }
 
   // ─── 5. CALORIES ───────────────────────────────────────
+  // 5a. Try raw data sources for real-time calorie counts
   try {
-    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
-        bucketByTime: { durationMillis: 86400000 },
-        startTimeMillis,
-        endTimeMillis: currentMillis
-      })
+    const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.calories.expended', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    if (resp.ok) {
-      console.log('--- CALORIES SYNC RAW DATA ---');
-      const data = await resp.json();
-      for (const bucket of (data.bucket || [])) {
-        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-        const points = bucket.dataset?.[0]?.point || [];
-        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
-        
-        console.log(`Calorie Bucket | StartMs: ${bucket.startTimeMillis} | LocalDate: ${dateKey} | Total Points: ${points.length} | Sum: ${total}`);
-        
-        if (dayMap[dateKey] && total > 0) {
-          dayMap[dateKey].caloriesBurned = Math.round(total);
+    if (dsResp.ok) {
+      const dsData = await dsResp.json();
+      console.log('[Calories] Found', (dsData.dataSource || []).length, 'calorie data sources');
+      for (const source of (dsData.dataSource || [])) {
+        const streamId = encodeURIComponent(source.dataStreamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        if (pointsResp.ok) {
+          const pointsData = await pointsResp.json();
+          for (const point of (pointsData.point || [])) {
+            const pointMs = parseInt(point.endTimeNanos) / 1000000;
+            const dateKey = toDateStr(pointMs);
+            const val = point.value?.[0]?.fpVal || 0;
+            if (dayMap[dateKey] && val > 0) {
+              dayMap[dateKey].caloriesBurned += val;
+            }
+          }
         }
       }
-      console.log('--- END CALORIES SYNC ---');
     }
   } catch (e) {
-    console.warn('Google Fit calories error (non-fatal):', e);
+    console.warn('Google Fit raw calories error:', e);
   }
+
+  // 5b. Fallback: aggregate if raw sources returned nothing
+  try {
+    const anyHasCals = Object.values(dayMap).some(d => d.caloriesBurned > 0);
+    if (!anyHasCals) {
+      console.log('[Calories] Raw sources empty, falling back to aggregate...');
+      const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
+          bucketByTime: { durationMillis: 86400000 },
+          startTimeMillis,
+          endTimeMillis: currentMillis
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const bucket of (data.bucket || [])) {
+          const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+          const points = bucket.dataset?.[0]?.point || [];
+          const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
+          if (dayMap[dateKey] && total > 0) dayMap[dateKey].caloriesBurned = Math.round(total);
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit calories aggregate fallback error:', e);
+  }
+
+  // Round all calories
+  for (const key of Object.keys(dayMap)) {
+    if (dayMap[key].caloriesBurned > 0) dayMap[key].caloriesBurned = Math.round(dayMap[key].caloriesBurned);
+  }
+  console.log('[Calories] Final:', Object.entries(dayMap).map(([k,v]) => `${k}:${v.caloriesBurned}`).join(', '));
 
   const results = Object.values(dayMap);
   console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0));
