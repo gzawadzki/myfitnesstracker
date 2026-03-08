@@ -1,17 +1,21 @@
 import React, { useState } from 'react';
-import { User, HeartPulse, LogOut, Database, Download, X } from 'lucide-react';
+import { User, HeartPulse, LogOut, Database, Download, X, Lock } from 'lucide-react';
 import { usePreferences } from '../hooks/usePreferences';
 import { useData } from '../context/DataContext';
 import { supabase } from '../lib/supabase';
+import { useToast } from '../components/Toast';
 import GoalsForm from '../components/GoalsForm';
 import { formatWeightGoal, hasIncompleteGoals } from '../components/goalsUtils';
 
 export default function ProfilePage({ session, injectMockData }) {
   const { preferences: prefs, loading: prefsLoading, savePreferences } = usePreferences();
   const { db } = useData();
+  const toast = useToast();
   const [downloading, setDownloading] = useState(false);
   const [savingGoals, setSavingGoals] = useState(false);
   const [showGoalsModal, setShowGoalsModal] = useState(false);
+  const [newPassword, setNewPassword] = useState('');
+  const [updatingPassword, setUpdatingPassword] = useState(false);
 
   const downloadAllData = () => {
     if (!db) return;
@@ -66,6 +70,25 @@ export default function ProfilePage({ session, injectMockData }) {
       setShowGoalsModal(false);
     } finally {
       setSavingGoals(false);
+    }
+  };
+
+  const handlePasswordChange = async () => {
+    if (!newPassword || newPassword.length < 6) {
+      toast.error('Password must be at least 6 characters');
+      return;
+    }
+    
+    setUpdatingPassword(true);
+    try {
+      const { error: updateErr } = await supabase.auth.updateUser({ password: newPassword });
+      if (updateErr) throw updateErr;
+      toast.success('Password updated successfully');
+      setNewPassword('');
+    } catch (err) {
+      toast.error('Failed to update password: ' + err.message);
+    } finally {
+      setUpdatingPassword(false);
     }
   };
 
@@ -190,6 +213,32 @@ export default function ProfilePage({ session, injectMockData }) {
           </div>
         </div>
       )}
+
+      <div style={cardStyle} className="mb-4">
+        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+          <Lock size={14} /> Security
+        </div>
+        <div className="p-4">
+          <p className="text-xs text-muted mb-3">Change your account password.</p>
+          <div className="flex flex-col gap-2">
+            <input 
+              type="password" 
+              placeholder="New password" 
+              className="w-full p-3 rounded-xl border text-sm" 
+              style={{ background: 'rgba(0,0,0,0.2)', borderColor: 'var(--surface-border)', color: '#fff' }}
+              value={newPassword}
+              onChange={(e) => setNewPassword(e.target.value)}
+            />
+            <button 
+              className="btn btn-secondary w-full text-sm" 
+              onClick={handlePasswordChange}
+              disabled={updatingPassword || !newPassword}
+            >
+              {updatingPassword ? 'Updating...' : 'Update Password'}
+            </button>
+          </div>
+        </div>
+      </div>
 
       <div style={cardStyle} className="mb-4">
         <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
