@@ -11,18 +11,36 @@ export default function NewWorkout() {
   const toast = useToast();
   const navigate = useNavigate();
   const location = useLocation();
+
+  // Parse workout ID from URL or default to first
+  const queryParams = new URLSearchParams(location.search);
+  const workoutId = queryParams.get('id') || (db.workouts && db.workouts.length > 0 ? db.workouts[0].id : null);
+  const currentWorkout = db.workouts?.find(w => w.id === workoutId);
+  const phase = currentWorkout ? db.phases?.find(p => p.id === currentWorkout.phaseId) : null;
+
   const [activeExerciseIndex, setActiveExerciseIndex] = useState(0);
   const [setsData, setSetsData] = useState(() => {
-    try { return JSON.parse(sessionStorage.getItem('workoutSetsData')) || {}; } catch { return {}; }
+    try { 
+      const storedId = sessionStorage.getItem('activeWorkoutId');
+      if (storedId && workoutId && storedId !== workoutId) return {};
+      return JSON.parse(sessionStorage.getItem('workoutSetsData')) || {}; 
+    } catch { return {}; }
   });
-  const [workoutComment, setWorkoutComment] = useState(
-    () => sessionStorage.getItem('workoutComment') || ''
-  );
+  const [workoutComment, setWorkoutComment] = useState(() => {
+    const storedId = sessionStorage.getItem('activeWorkoutId');
+    if (storedId && workoutId && storedId !== workoutId) return '';
+    return sessionStorage.getItem('workoutComment') || '';
+  });
   const workoutStartTime = useRef(() => {
+    const storedId = sessionStorage.getItem('activeWorkoutId');
+    if (storedId && workoutId && storedId !== workoutId) {
+      sessionStorage.removeItem('workoutStartTime');
+    }
     const stored = sessionStorage.getItem('workoutStartTime');
     if (stored) return parseInt(stored);
     const now = Date.now();
     sessionStorage.setItem('workoutStartTime', now);
+    if (workoutId) sessionStorage.setItem('activeWorkoutId', workoutId);
     return now;
   });
   // Initialize the ref value (lazy init)
@@ -32,12 +50,6 @@ export default function NewWorkout() {
   const [elapsedSeconds, setElapsedSeconds] = useState(
     () => Math.floor((Date.now() - (parseInt(sessionStorage.getItem('workoutStartTime')) || Date.now())) / 1000)
   );
-
-  // Parse workout ID from URL or default to first
-  const queryParams = new URLSearchParams(location.search);
-  const workoutId = queryParams.get('id') || (db.workouts && db.workouts.length > 0 ? db.workouts[0].id : null);
-  const currentWorkout = db.workouts?.find(w => w.id === workoutId);
-  const phase = currentWorkout ? db.phases?.find(p => p.id === currentWorkout.phaseId) : null;
 
   // ─── Exercise flexibility state ───────────────────────
   const baseExercises = useMemo(() => {
@@ -80,14 +92,7 @@ export default function NewWorkout() {
     sessionStorage.setItem('workoutComment', workoutComment);
   }, [workoutComment]);
 
-  // Clear sessionStorage when leaving the workout page
-  useEffect(() => {
-    return () => {
-      sessionStorage.removeItem('workoutStartTime');
-      sessionStorage.removeItem('workoutSetsData');
-      sessionStorage.removeItem('workoutComment');
-    };
-  }, []);
+  // Removed automatic clearing of sessionStorage on unmount so data persists if user accidentally navigates back
 
   // Build the active exercise list using order + skips + swaps
   const exercises = useMemo(() => {
@@ -289,6 +294,7 @@ export default function NewWorkout() {
       sessionStorage.removeItem('workoutStartTime');
       sessionStorage.removeItem('workoutSetsData');
       sessionStorage.removeItem('workoutComment');
+      sessionStorage.removeItem('activeWorkoutId');
       toast.success('Workout saved!');
       navigate('/');
     } catch (err) {
@@ -319,7 +325,13 @@ export default function NewWorkout() {
           </div>
         </div>
         <button className="btn btn-secondary text-sm" style={{ padding: '6px 12px' }} onClick={() => {
-          if (!hasData || window.confirm('Discard this workout?')) navigate('/');
+          if (!hasData || window.confirm('Discard this workout?')) {
+            sessionStorage.removeItem('workoutStartTime');
+            sessionStorage.removeItem('workoutSetsData');
+            sessionStorage.removeItem('workoutComment');
+            sessionStorage.removeItem('activeWorkoutId');
+            navigate('/');
+          }
         }}>
           <X size={16} /> Cancel
         </button>
