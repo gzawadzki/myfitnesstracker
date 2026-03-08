@@ -50,15 +50,20 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     });
     if (resp.status === 401) throw new Error('Unauthorized');
     if (resp.ok) {
+      console.log('--- STEPS SYNC RAW DATA ---');
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
         const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
         const points = bucket.dataset?.[0]?.point || [];
         const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
+        
+        console.log(`Step Bucket | StartMs: ${bucket.startTimeMillis} | LocalDate: ${dateKey} | Total Points: ${points.length} | Sum: ${total}`);
+        
         if (dayMap[dateKey] && total > 0) {
           dayMap[dateKey].steps = total;
         }
       }
+      console.log('--- END STEPS SYNC ---');
     } else {
       console.error('Google Fit steps fetch failed:', await resp.text());
     }
@@ -275,15 +280,20 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
       })
     });
     if (resp.ok) {
+      console.log('--- CALORIES SYNC RAW DATA ---');
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
         const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
         const points = bucket.dataset?.[0]?.point || [];
         const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
+        
+        console.log(`Calorie Bucket | StartMs: ${bucket.startTimeMillis} | LocalDate: ${dateKey} | Total Points: ${points.length} | Sum: ${total}`);
+        
         if (dayMap[dateKey] && total > 0) {
           dayMap[dateKey].caloriesBurned = Math.round(total);
         }
       }
+      console.log('--- END CALORIES SYNC ---');
     }
   } catch (e) {
     console.warn('Google Fit calories error (non-fatal):', e);
