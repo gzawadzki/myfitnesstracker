@@ -43,10 +43,17 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     if (resp.ok) {
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
-        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-        const points = bucket.dataset?.[0]?.point || [];
-        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
-        if (dayMap[dateKey]) dayMap[dateKey].steps = total;
+        for (const dataset of (bucket.dataset || [])) {
+          for (const point of (dataset.point || [])) {
+            // Use the point's actual end time for the local date bucket to fix timezone offsets
+            const pointMs = parseInt(point.endTimeNanos) / 1000000;
+            const dateKey = toDateStr(pointMs);
+            const val = point.value?.[0]?.intVal || 0;
+            if (dayMap[dateKey] && val > 0) {
+              dayMap[dateKey].steps += val;
+            }
+          }
+        }
       }
     } else {
       console.error('Google Fit steps fetch failed:', await resp.text());
@@ -138,6 +145,8 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
         const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
         const points = bucket.dataset?.[0]?.point || [];
         if (points.length > 0 && dayMap[dateKey]) {
+          // Sort points by timestamp to reliably get the latest measurement of the day
+          points.sort((a, b) => parseInt(a.startTimeNanos) - parseInt(b.startTimeNanos));
           const val = points[points.length - 1]?.value?.[0]?.fpVal;
           if (val) dayMap[dateKey].weightKg = Number(val.toFixed(1));
         }
@@ -167,6 +176,8 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
           const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
           const points = bucket.dataset?.[0]?.point || [];
           if (points.length > 0 && dayMap[dateKey]) {
+            // Sort points by timestamp to reliably get the latest measurement of the day
+            points.sort((a, b) => parseInt(a.startTimeNanos) - parseInt(b.startTimeNanos));
             const val = points[points.length - 1]?.value?.[0]?.fpVal;
             if (val) dayMap[dateKey].weightKg = Number(val.toFixed(1));
           }
