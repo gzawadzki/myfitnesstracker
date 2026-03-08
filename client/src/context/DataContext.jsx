@@ -26,6 +26,8 @@ export function DataProvider({ children }) {
   });
   const [loading, setLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
+  const [sessionLimit, setSessionLimit] = useState(100);
+  const [hasMoreSessions, setHasMoreSessions] = useState(true);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingHealth, setLoadingHealth] = useState(true);
@@ -233,7 +235,13 @@ export function DataProvider({ children }) {
         setAppReady(true);
       }
     }
-  }, [fetchCatalogData, fetchWorkoutSessions, fetchHealthMetrics, buildMappedDb]);
+  }, [sessionLimit, fetchCatalogData, fetchWorkoutSessions, fetchHealthMetrics, buildMappedDb]);
+
+  const loadMoreSessions = useCallback(async () => {
+    const newLimit = sessionLimit + 50;
+    setSessionLimit(newLimit);
+    await loadData(true, newLimit);
+  }, [sessionLimit, loadData]);
 
   useEffect(() => {
     let focusDebounce = null;
