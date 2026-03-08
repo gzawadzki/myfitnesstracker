@@ -431,17 +431,27 @@ export function DataProvider({ children }) {
 
     console.log(`[syncExternalSessions] Syncing ${newSessions.length} new sessions...`);
 
-    const sessionsToInsert = newSessions.map(s => ({
-      user_id: userId,
-      google_fit_session_id: s.id,
-      created_at: s.startTime,
-      duration_minutes: s.durationMinutes,
-      calories: s.calories,
-      distance_meters: s.distanceMeters,
-      steps: s.steps,
-      notes: `Synced from Google Fit: ${s.type}`,
-      template_id: null // No template for external auto-synced sessions
-    }));
+    const sessionsToInsert = newSessions.map(s => {
+      let paceStr = '';
+      if (s.distanceMeters > 0 && s.durationMinutes > 0) {
+        const pace = s.durationMinutes / (s.distanceMeters / 1000);
+        const min = Math.floor(pace);
+        const sec = Math.round((pace % 1) * 60).toString().padStart(2, '0');
+        paceStr = ` | Tempo: ${min}:${sec} min/km`;
+      }
+
+      return {
+        user_id: userId,
+        google_fit_session_id: s.id,
+        created_at: s.startTime,
+        duration_minutes: s.durationMinutes,
+        calories: s.calories,
+        distance_meters: s.distanceMeters,
+        steps: s.steps,
+        notes: `Synced from Google Fit: ${s.type}${paceStr}`,
+        template_id: null // No template for external auto-synced sessions
+      };
+    });
 
     const { data, error } = await supabase
       .from('workout_sessions')

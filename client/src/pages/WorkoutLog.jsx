@@ -124,6 +124,16 @@ export default function WorkoutLog() {
                                 📍 {(session.distance_meters / 1000).toFixed(2)} km
                               </div>
                             )}
+                            {session.distance_meters > 0 && session.duration_minutes > 0 && (
+                              <div className="badge text-xs" style={{ background: 'rgba(167, 139, 250, 0.1)', color: '#a78bfa', border: '1px solid rgba(167, 139, 250, 0.2)' }}>
+                                ⏱️ {(() => {
+                                  const pace = session.duration_minutes / (session.distance_meters / 1000);
+                                  const paceMin = Math.floor(pace);
+                                  const paceSec = Math.round((pace % 1) * 60).toString().padStart(2, '0');
+                                  return `${paceMin}:${paceSec}`;
+                                })()} min/km
+                              </div>
+                            )}
                             {session.calories > 0 && (
                               <div className="badge text-xs" style={{ background: 'rgba(248, 113, 113, 0.1)', color: '#f87171', border: '1px solid rgba(248, 113, 113, 0.2)' }}>
                                 🔥 {session.calories} kcal
