@@ -13,13 +13,28 @@ const createEmptyDb = () => ({
 });
 
 export function DataProvider({ children }) {
-  const [db, setDb] = useState(createEmptyDb);
+  const [db, setDb] = useState(() => {
+    const cached = localStorage.getItem('fitnotes_db');
+    if (cached) {
+      try {
+        return JSON.parse(cached);
+      } catch (e) {
+        return createEmptyDb();
+      }
+    }
+    return createEmptyDb();
+  });
   const [loading, setLoading] = useState(true);
   const [appReady, setAppReady] = useState(false);
   const [loadingCatalog, setLoadingCatalog] = useState(true);
   const [loadingSessions, setLoadingSessions] = useState(true);
   const [loadingHealth, setLoadingHealth] = useState(true);
   const [error, setError] = useState(null);
+
+  // Persist DB to localStorage whenever it changes
+  useEffect(() => {
+    localStorage.setItem('fitnotes_db', JSON.stringify(db));
+  }, [db]);
 
   useEffect(() => {
     let isMounted = true;
@@ -153,10 +168,23 @@ export function DataProvider({ children }) {
           setLoadingHealth(true);
         }
 
-        // Get current user for filtering user-specific tables
-        const { data: userData } = await supabase.auth.getUser();
-        const userId = userData?.user?.id;
-        if (!userId) throw new Error("Not logged in");
+        // Get current user session (getSession is local and fast, works offline)
+        const { data: { session: currentSession } } = await supabase.auth.getSession();
+        const userId = currentSession?.user?.id;
+        
+        if (!userId) {
+          // If we have cached data, we might still be "logged in" offline
+          const cached = localStorage.getItem('fitnotes_db');
+          if (cached && !isBackground) {
+             setLoadingCatalog(false);
+             setLoadingSessions(false);
+             setLoadingHealth(false);
+             setLoading(false);
+             setAppReady(true);
+             return;
+          }
+          throw new Error("Not logged in");
+        }
 
         const catalogPromise = fetchCatalogData().finally(() => {
           if (isMounted) setLoadingCatalog(false);
@@ -177,8 +205,19 @@ export function DataProvider({ children }) {
           setDb(mappedDb);
         }
       } catch (err) {
+        const isNetworkError = err.message === 'Failed to fetch' || err.name === 'TypeError' || err.code === 'PGRST102';
         console.error("Error loading Supabase data:", err);
-        if (isMounted) setError(err.message);
+        
+        if (isMounted) {
+          // If we have cached data and it's a network error, don't break the UI
+          const hasCache = db.sessions.length > 0 || Object.keys(db.exercises).length > 0;
+          if (isNetworkError && hasCache) {
+            console.log("Offline mode: Using cached data due to network error.");
+            setError(null);
+          } else {
+            setError(err.message);
+          }
+        }
       } finally {
         if (isMounted) {
           setLoading(false);
@@ -249,8 +288,8 @@ export function DataProvider({ children }) {
 
   const saveDailyHealthMetric = async (dateStr, type, value) => {
     // type can be 'sleep_hours', 'steps', or 'weight'
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    const userId = currentSession?.user?.id;
     if (!userId) throw new Error("Not logged in");
 
     // Step 1: Read existing row for this date (if any) so we don't overwrite other columns
@@ -317,8 +356,8 @@ export function DataProvider({ children }) {
   };
 
   const deleteDailyHealthMetric = async (dateStr, type) => {
-    const { data: userData } = await supabase.auth.getUser();
-    const userId = userData?.user?.id;
+    const { data: { session: currentSession } } = await supabase.auth.getSession();
+    const userId = currentSession?.user?.id;
     if (!userId) throw new Error("Not logged in");
 
     const updatePayload = {};
