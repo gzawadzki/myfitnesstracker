@@ -6,7 +6,7 @@ import { useToast } from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function WorkoutLog() {
-  const { db, deleteWorkoutSession } = useData();
+  const { db, deleteWorkoutSession, loadMoreSessions, hasMoreSessions, loadingSessions } = useData();
   const toast = useToast();
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
@@ -188,6 +188,18 @@ export default function WorkoutLog() {
           })
         )}
       </div>
+
+      {hasMoreSessions && sessions.length > 0 && (
+        <div className="flex justify-center mt-6 mb-2">
+          <button 
+            className="btn btn-secondary text-sm"
+            onClick={loadMoreSessions}
+            disabled={loadingSessions}
+          >
+            {loadingSessions ? 'Loading...' : 'Load older workouts'}
+          </button>
+        </div>
+      )}
 
       <ConfirmModal
         open={!!confirmDeleteId}

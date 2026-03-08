@@ -43,7 +43,8 @@ export default function Dashboard() {
     supabase.auth.getSession().then(({ data: { session: s } }) => setSession(s));
   }, []);
   const email = session?.user?.email || '';
-  const displayName = email ? email.split('@')[0].split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Athlete';
+  const displayName = prefs?.display_name
+    || (email ? email.split('@')[0].split(/[._-]/).map(w => w.charAt(0).toUpperCase() + w.slice(1)).join(' ') : 'Athlete');
 
   const syncGoogleFit = async (token) => {
     setGoogleLoading(true);
@@ -134,10 +135,12 @@ export default function Dashboard() {
       setIsGoogleConnected(false);
       setSyncStatus('error');
       if (err.message === 'Unauthorized' || err.message === 'Forbidden') {
-        toast.error('Token expired — reconnecting...');
+        toast.error('Session expired — reconnecting to Google Fit...');
         setTimeout(() => loginGoogleFit(), 500);
+      } else if (err.message?.includes('fetch') || err.message?.includes('network') || !navigator.onLine) {
+        toast.error('Network error — check your connection and try again.');
       } else {
-        toast.error('Google Fit sync failed');
+        toast.error('Google Fit sync failed: ' + (err.message || 'Unknown error'));
       }
     } finally {
       setGoogleLoading(false);

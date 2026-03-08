@@ -16,6 +16,12 @@ export default function ProfilePage({ session, injectMockData }) {
   const [showGoalsModal, setShowGoalsModal] = useState(false);
   const [newPassword, setNewPassword] = useState('');
   const [updatingPassword, setUpdatingPassword] = useState(false);
+  const [displayName, setDisplayName] = useState('');
+  const [savingName, setSavingName] = useState(false);
+
+  React.useEffect(() => {
+    if (prefs?.display_name) setDisplayName(prefs.display_name);
+  }, [prefs?.display_name]);
 
   const downloadAllData = () => {
     if (!db) return;
@@ -141,6 +147,37 @@ export default function ProfilePage({ session, injectMockData }) {
           <div className="flex justify-between items-center text-sm">
             <span className="text-muted">Member Since</span>
             <span className="font-medium">{memberSince}</span>
+          </div>
+          <div className="mt-3 pt-3" style={{ borderTop: '1px solid var(--surface-border)' }}>
+            <label className="text-xs text-muted block mb-1">Display Name</label>
+            <div className="flex gap-2">
+              <input
+                type="text"
+                placeholder="Your name"
+                className="flex-1 p-2 rounded-lg border text-sm"
+                style={{ background: 'rgba(0,0,0,0.2)', borderColor: 'var(--surface-border)', color: '#fff' }}
+                value={displayName}
+                onChange={(e) => setDisplayName(e.target.value)}
+              />
+              <button
+                className="btn btn-secondary text-xs"
+                style={{ padding: '8px 12px' }}
+                disabled={savingName || !displayName.trim()}
+                onClick={async () => {
+                  setSavingName(true);
+                  try {
+                    await savePreferences({ display_name: displayName.trim() });
+                    toast.success('Name saved');
+                  } catch {
+                    toast.error('Failed to save name');
+                  } finally {
+                    setSavingName(false);
+                  }
+                }}
+              >
+                {savingName ? '...' : 'Save'}
+              </button>
+            </div>
           </div>
         </div>
       </div>

@@ -58,16 +58,23 @@ export function DataProvider({ children }) {
     return { phasesData, workoutsData, exercisesData, mappingsData };
   }, []);
 
-  const fetchWorkoutSessions = useCallback(async (userId) => {
+  const fetchWorkoutSessions = useCallback(async (userId, currentLimit) => {
     const { data: latestSessionsData, error: sessErr } = await supabase
       .from('workout_sessions')
       .select('*')
       .eq('user_id', userId)
       .order('created_at', { ascending: false })
-      .limit(100);
+      .limit(currentLimit + 1); // fetch one extra to check if there are more
     if (sessErr) throw sessErr;
 
-    const sessionIds = latestSessionsData.map(s => s.id);
+    const hasMore = latestSessionsData.length > currentLimit;
+    const items = hasMore ? latestSessionsData.slice(0, currentLimit) : latestSessionsData;
+    
+    if (isMounted.current) {
+      setHasMoreSessions(hasMore);
+    }
+
+    const sessionIds = items.map(s => s.id);
     let loggedSetsData = [];
     if (sessionIds.length > 0) {
       const { data: setsData, error: setsErr } = await supabase
@@ -79,7 +86,7 @@ export function DataProvider({ children }) {
       loggedSetsData = setsData || [];
     }
 
-    return { latestSessionsData, loggedSetsData };
+    return { latestSessionsData: items, loggedSetsData };
   }, []);
 
   const fetchHealthMetrics = useCallback(async (userId) => {
@@ -159,7 +166,8 @@ export function DataProvider({ children }) {
     return mappedDb;
   }, []);
 
-  const loadData = useCallback(async (isBackground = false) => {
+  const loadData = useCallback(async (isBackground = false, specificLimit = null) => {
+    const activeLimit = specificLimit || sessionLimit;
     try {
       // Use a local check for cache that doesn't depend on the state variable directly in the callback's dependencies
       const cached = localStorage.getItem('fitnotes_db');
@@ -193,7 +201,7 @@ export function DataProvider({ children }) {
       const catalogPromise = fetchCatalogData().finally(() => {
         if (isMounted.current) setLoadingCatalog(false);
       });
-      const sessionsPromise = fetchWorkoutSessions(userId).finally(() => {
+      const sessionsPromise = fetchWorkoutSessions(userId, activeLimit).finally(() => {
         if (isMounted.current) setLoadingSessions(false);
       });
       const healthPromise = fetchHealthMetrics(userId).finally(() => {
@@ -490,7 +498,9 @@ export function DataProvider({ children }) {
       saveDailyHealthMetric,
       deleteDailyHealthMetric,
       createExercise,
-      syncExternalSessions
+      syncExternalSessions,
+      loadMoreSessions,
+      hasMoreSessions
     }}>
       {children}
     </DataContext.Provider>
