@@ -65,7 +65,13 @@ export default function Dashboard() {
       setGfitToken(null);
       setIsGoogleConnected(false);
       setSyncStatus('error');
-      toast.error('Google Fit sync failed');
+      // Auto re-login if token expired (403/401)
+      if (err.message === 'Unauthorized' || err.message === 'Forbidden') {
+        toast.error('Token expired — reconnecting...');
+        setTimeout(() => loginGoogleFit(), 500);
+      } else {
+        toast.error('Google Fit sync failed');
+      }
     } finally {
       setGoogleLoading(false);
     }
@@ -77,7 +83,7 @@ export default function Dashboard() {
       setIsGoogleConnected(true);
       await syncGoogleFit(tokenResponse.access_token);
     },
-    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
+    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.heart_rate.read',
     onError: error => console.error('Login Failed:', error)
   });
 

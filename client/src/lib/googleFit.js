@@ -48,7 +48,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
         endTimeMillis: currentMillis
       })
     });
-    if (resp.status === 401) throw new Error('Unauthorized');
+    if (resp.status === 401 || resp.status === 403) throw new Error(resp.status === 401 ? 'Unauthorized' : 'Forbidden');
     if (resp.ok) {
       console.log('--- STEPS SYNC RAW DATA ---');
       const data = await resp.json();
@@ -141,7 +141,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     const dsResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.weight', {
       headers: { 'Authorization': `Bearer ${accessToken}` }
     });
-    if (dsResp.status === 401) throw new Error('Unauthorized');
+    if (dsResp.status === 401 || dsResp.status === 403) throw new Error(dsResp.status === 401 ? 'Unauthorized' : 'Forbidden');
     
     if (dsResp.ok) {
       const dsData = await dsResp.json();
