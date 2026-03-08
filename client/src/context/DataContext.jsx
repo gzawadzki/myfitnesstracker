@@ -132,7 +132,7 @@ export function DataProvider({ children }) {
       }, {})
     };
 
-    latestSessionsData.reverse().forEach((sess) => {
+    [...latestSessionsData].reverse().forEach((sess) => {
       const sessSets = loggedSetsData.filter(s => s.session_id === sess.id);
       const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
 
@@ -393,11 +393,13 @@ export function DataProvider({ children }) {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Exercise name cannot be empty');
     
-    // Generate a simple ID
-    const id = 'ex_' + trimmed.toLowerCase().replace(/[^a-z0-9]+/g, '_').replace(/^_|_$/g, '');
-    
-    // Check if already exists
-    if (db.exercises[id]) return { id, name: db.exercises[id].name };
+    // Check if exercise with this name already exists
+    const existing = Object.values(db.exercises).find(
+      ex => ex.name.toLowerCase() === trimmed.toLowerCase()
+    );
+    if (existing) return { id: existing.id, name: existing.name };
+
+    const id = crypto.randomUUID();
     
     const { data, error } = await supabase
       .from('exercises')

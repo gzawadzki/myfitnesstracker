@@ -26,3 +26,5 @@ CREATE POLICY "Users can insert own health metrics" ON public.health_metrics
   FOR INSERT WITH CHECK (auth.uid() = user_id);
 CREATE POLICY "Users can update own health metrics" ON public.health_metrics
   FOR UPDATE USING (auth.uid() = user_id);
+CREATE POLICY "Users can delete own health metrics" ON public.health_metrics
+  FOR DELETE USING (auth.uid() = user_id);

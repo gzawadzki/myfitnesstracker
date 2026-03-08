@@ -28,6 +28,15 @@ export default function Health() {
   const [heartRateInput, setHeartRateInput] = useState(todayMetrics.heart_rate || "");
   const [caloriesInput, setCaloriesInput] = useState(todayMetrics.calories_burned || "");
 
+  // Sync inputs when async data arrives or changes (e.g. after Google Fit sync)
+  React.useEffect(() => {
+    setSleepInput(todayMetrics.sleep_hours || "");
+    setStepsInput(todayMetrics.steps || "");
+    setWeightInput(todayMetrics.weight || "");
+    setHeartRateInput(todayMetrics.heart_rate || "");
+    setCaloriesInput(todayMetrics.calories_burned || "");
+  }, [todayMetrics.sleep_hours, todayMetrics.steps, todayMetrics.weight, todayMetrics.heart_rate, todayMetrics.calories_burned]);
+
   // Goals
   const goals = getGoalFormValues(prefs);
   const hasIncomplete = hasIncompleteGoals(prefs);
