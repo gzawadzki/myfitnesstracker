@@ -12,12 +12,13 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   startDate.setHours(0, 0, 0, 0);
 
   // End exactly today at 23:59:59.999 local time 
-  // (Prevents Google Fit from dropping the final incomplete day bucket in dataset:aggregate)
+  // (Prevents Google Fit from dropping the final incomplete day in pure raw searches)
   const endDate = new Date();
   endDate.setHours(23, 59, 59, 999);
 
   const startTimeMillis = startDate.getTime();
-  const endTimeMillis = endDate.getTime();
+  const rawEndTimeMillis = endDate.getTime();
+  const currentMillis = now.getTime(); // Used for aggregates so we don't request future data
 
   // Helper: millis -> YYYY-MM-DD in local time
   const toDateStr = (ms) => {
@@ -41,27 +42,22 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
+        aggregateBy: [
+          { dataTypeName: 'com.google.step_count.delta', dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps' }
+        ],
         bucketByTime: { durationMillis: 86400000 },
         startTimeMillis,
-        endTimeMillis
+        endTimeMillis: currentMillis
       })
     });
     if (resp.status === 401) throw new Error('Unauthorized');
     if (resp.ok) {
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
-        for (const dataset of (bucket.dataset || [])) {
-          for (const point of (dataset.point || [])) {
-            // Use the point's actual end time for the local date bucket to fix timezone offsets
-            const pointMs = parseInt(point.endTimeNanos) / 1000000;
-            const dateKey = toDateStr(pointMs);
-            const val = point.value?.[0]?.intVal || 0;
-            if (dayMap[dateKey] && val > 0) {
-              dayMap[dateKey].steps += val;
-            }
-          }
-        }
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
+        if (dayMap[dateKey]) dayMap[dateKey].steps = total;
       }
     } else {
       console.error('Google Fit steps fetch failed:', await resp.text());
@@ -105,7 +101,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
           aggregateBy: [{ dataTypeName: 'com.google.sleep.segment' }],
           bucketByTime: { durationMillis: 86400000 },
           startTimeMillis,
-          endTimeMillis
+          endTimeMillis: currentMillis
         })
       });
       if (resp.ok) {
@@ -146,7 +142,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
       const dsData = await dsResp.json();
       for (const source of (dsData.dataSource || [])) {
         const streamId = encodeURIComponent(source.dataStreamId);
-        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${endTimeMillis}000000`, {
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${streamId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
           headers: { 'Authorization': `Bearer ${accessToken}` }
         });
         
@@ -247,7 +243,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
         aggregateBy: [{ dataTypeName: 'com.google.heart_rate.bpm' }],
         bucketByTime: { durationMillis: 86400000 },
         startTimeMillis,
-        endTimeMillis
+        endTimeMillis: currentMillis
       })
     });
     if (resp.ok) {
@@ -275,7 +271,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
         aggregateBy: [{ dataTypeName: 'com.google.calories.expended' }],
         bucketByTime: { durationMillis: 86400000 },
         startTimeMillis,
-        endTimeMillis
+        endTimeMillis: currentMillis
       })
     });
     if (resp.ok) {
