@@ -6,13 +6,15 @@ import { useToast } from '../components/Toast';
 import ConfirmModal from '../components/ConfirmModal';
 
 export default function WorkoutLog() {
-  const { db, deleteWorkoutSession, loadMoreSessions, hasMoreSessions, loadingSessions } = useData();
+  const { db, deleteWorkoutSession, deleteCardioSession, loadMoreSessions, hasMoreSessions, loadingSessions } = useData();
   const toast = useToast();
   const [expandedSessionId, setExpandedSessionId] = useState(null);
   const [deletingId, setDeletingId] = useState(null);
   const [confirmDeleteId, setConfirmDeleteId] = useState(null);
 
-  const sessions = [...(db.sessions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+  const gymSessions = (db.sessions || []).map(s => ({ ...s, isCardio: false }));
+  const cardioSessions = (db.cardioSessions || []).map(s => ({ ...s, isCardio: true, template_id: null }));
+  const sessions = [...gymSessions, ...cardioSessions].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
 
   const formatShortDate = (isoString) => {
     return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
@@ -65,7 +67,7 @@ export default function WorkoutLog() {
                 >
                   <div>
                     <h3 className="h3 mb-1 text-sm">
-                      {session.google_fit_session_id ? `Synced: ${session.notes?.replace('Synced from Google Fit: ', '') || 'Activity'}` : templateName}
+                      {session.isCardio ? `Activity: ${session.activity_name || 'Cardio'}` : templateName}
                     </h3>
                     <p className="text-xs text-muted">
                       {formatShortDate(session.created_at)}
@@ -107,13 +109,13 @@ export default function WorkoutLog() {
                             💤 {session.health_sleep_hours}h
                           </div>
                         )}
-                        {session.health_steps && !session.google_fit_session_id && (
+                        {session.health_steps && !session.isCardio && (
                           <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
                             👟 {session.health_steps.toLocaleString()}
                           </div>
                         )}
                         {/* Synced Activity Details */}
-                        {session.google_fit_session_id && (
+                        {session.isCardio && (
                           <>
                             {session.steps > 0 && (
                               <div className="badge text-xs" style={{ background: 'rgba(52, 211, 153, 0.1)', color: '#34d399', border: '1px solid rgba(52, 211, 153, 0.2)' }}>
@@ -179,7 +181,7 @@ export default function WorkoutLog() {
                         })}
                       </div>
                     ) : (
-                      !session.google_fit_session_id && <div className="text-xs text-muted">No exercises recorded for this session.</div>
+                      !session.isCardio && <div className="text-xs text-muted">No exercises recorded for this session.</div>
                     )}
                   </div>
                 )}
@@ -212,8 +214,14 @@ export default function WorkoutLog() {
         onConfirm={async () => {
           try {
             setDeletingId(confirmDeleteId);
-            await deleteWorkoutSession(confirmDeleteId);
-            toast.success('Workout deleted');
+            const targetSession = sessions.find(s => s.id === confirmDeleteId);
+            if (targetSession?.isCardio) {
+              await deleteCardioSession(confirmDeleteId);
+              toast.success('Activity deleted');
+            } else {
+              await deleteWorkoutSession(confirmDeleteId);
+              toast.success('Workout deleted');
+            }
           } catch (err) {
             toast.error('Failed to delete: ' + err.message);
           } finally {

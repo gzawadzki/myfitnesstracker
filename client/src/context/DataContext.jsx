@@ -9,7 +9,8 @@ const createEmptyDb = () => ({
   healthMetrics: [],
   phases: [],
   workouts: [],
-  exercises: {}
+  exercises: {},
+  cardioSessions: []
 });
 
 export function DataProvider({ children }) {
@@ -103,7 +104,18 @@ export function DataProvider({ children }) {
     return healthData || [];
   }, []);
 
-  const buildMappedDb = useCallback((catalog, sessions, healthMetrics) => {
+  const fetchCardioSessions = useCallback(async (userId, currentLimit) => {
+    const { data: cardioData, error: cardioErr } = await supabase
+      .from('cardio_sessions')
+      .select('*')
+      .eq('user_id', userId)
+      .order('created_at', { ascending: false })
+      .limit(currentLimit);
+    if (cardioErr) throw cardioErr;
+    return cardioData || [];
+  }, []);
+
+  const buildMappedDb = useCallback((catalog, sessions, healthMetrics, cardioSessionsData) => {
     const { phasesData, workoutsData, exercisesData, mappingsData } = catalog;
     const { latestSessionsData, loggedSetsData } = sessions;
 
@@ -112,6 +124,7 @@ export function DataProvider({ children }) {
         ...session,
         sets: loggedSetsData.filter(set => set.session_id === session.id)
       })),
+      cardioSessions: cardioSessionsData,
       healthMetrics,
       phases: phasesData,
       workouts: workoutsData.map(w => ({
@@ -209,8 +222,10 @@ export function DataProvider({ children }) {
       const healthPromise = fetchHealthMetrics(userId).finally(() => {
         if (isMounted.current) setLoadingHealth(false);
       });
-      const [catalog, sessions, healthMetrics] = await Promise.all([catalogPromise, sessionsPromise, healthPromise]);
-      const mappedDb = buildMappedDb(catalog, sessions, healthMetrics);
+      const cardioPromise = fetchCardioSessions(userId, activeLimit);
+      
+      const [catalog, sessions, healthMetrics, cardioSessionsList] = await Promise.all([catalogPromise, sessionsPromise, healthPromise, cardioPromise]);
+      const mappedDb = buildMappedDb(catalog, sessions, healthMetrics, cardioSessionsList);
 
       if (isMounted.current) {
         setError(null);
@@ -235,7 +250,7 @@ export function DataProvider({ children }) {
         setAppReady(true);
       }
     }
-  }, [sessionLimit, fetchCatalogData, fetchWorkoutSessions, fetchHealthMetrics, buildMappedDb]);
+  }, [sessionLimit, fetchCatalogData, fetchWorkoutSessions, fetchHealthMetrics, fetchCardioSessions, buildMappedDb]);
 
   const loadMoreSessions = useCallback(async () => {
     const newLimit = sessionLimit + 50;
@@ -405,6 +420,12 @@ export function DataProvider({ children }) {
     return data;
   };
 
+  const deleteCardioSession = async (sessionId) => {
+    const { error } = await supabase.from('cardio_sessions').delete().eq('id', sessionId);
+    if (error) throw error;
+    await loadData(true);
+  };
+
   const createExercise = async (name) => {
     const trimmed = name.trim();
     if (!trimmed) throw new Error('Exercise name cannot be empty');
@@ -442,7 +463,7 @@ export function DataProvider({ children }) {
     const uniqueInputSessions = Object.values(uniqueMap);
 
     // 2. Filter out what we already have in local state
-    const existingGfIds = new Set(db.sessions.filter(s => s.google_fit_session_id).map(s => s.google_fit_session_id));
+    const existingGfIds = new Set((db.cardioSessions || []).filter(s => s.google_fit_session_id).map(s => s.google_fit_session_id));
     const newSessions = uniqueInputSessions.filter(s => !existingGfIds.has(s.id));
 
     if (newSessions.length === 0) return;
@@ -462,17 +483,17 @@ export function DataProvider({ children }) {
         user_id: userId,
         google_fit_session_id: s.id,
         created_at: s.startTime,
+        activity_name: s.type,
         duration_minutes: s.durationMinutes,
         calories: s.calories,
         distance_meters: s.distanceMeters,
         steps: s.steps,
-        notes: `Synced from Google Fit: ${s.type}${paceStr}`,
-        template_id: null // No template for external auto-synced sessions
+        notes: paceStr ? `Tempo: ${min}:${sec} min/km` : ''
       };
     });
 
     const { data, error } = await supabase
-      .from('workout_sessions')
+      .from('cardio_sessions')
       .upsert(sessionsToInsert, { onConflict: 'google_fit_session_id' })
       .select();
 
@@ -483,10 +504,10 @@ export function DataProvider({ children }) {
 
     if (data && data.length > 0) {
       setDb(prev => {
-        const updatedSessions = [...data.map(s => ({ ...s, sets: [] })), ...prev.sessions];
+        const updatedCardio = [...data, ...(prev.cardioSessions || [])];
         // Sort by date descending
-        updatedSessions.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
-        return { ...prev, sessions: updatedSessions };
+        updatedCardio.sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+        return { ...prev, cardioSessions: updatedCardio };
       });
     }
   };
@@ -503,6 +524,7 @@ export function DataProvider({ children }) {
       loadData,
       saveWorkoutSession,
       deleteWorkoutSession,
+      deleteCardioSession,
       saveDailyHealthMetric,
       deleteDailyHealthMetric,
       createExercise,

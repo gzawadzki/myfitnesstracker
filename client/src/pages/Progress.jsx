@@ -93,7 +93,7 @@ export default function Progress() {
 
   // 1. Calculate Real Metric Cards Data
   const gymWorkouts = (db.sessions || []).filter(s => s.template_id !== null).length;
-  const cardioWorkouts = (db.sessions || []).filter(s => s.template_id === null).length;
+  const cardioWorkouts = (db.cardioSessions || []).length;
   const totalVolume = (db.sessions || []).reduce((acc, sess) => {
     return acc + (sess.sets || [])
       .filter(set => !set.is_warmup)
