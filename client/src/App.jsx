@@ -41,58 +41,6 @@ function Layout({ session }) {
     );
   }
 
-  const injectMockData = async () => {
-    try {
-      if(!window.confirm("Inject 14 days of mock workouts and health data into your account?")) return;
-      
-      const userId = (await supabase.auth.getSession()).data.session?.user?.id;
-      if (!userId) throw new Error("No active session");
-
-      const { data: templates } = await supabase.from('workout_templates').select('*').limit(5);
-      const { data: exercises } = await supabase.from('exercises').select('*').limit(20);
-
-      const healthData = [];
-      for (let i = 14; i >= 0; i--) {
-        const d = new Date();
-        d.setDate(d.getDate() - i);
-        healthData.push({
-          user_id: userId,
-          date: d.toISOString().split('T')[0],
-          sleep_hours: (Math.random() * (9 - 5) + 5).toFixed(1),
-          steps: Math.floor(Math.random() * (12000 - 3000) + 3000)
-        });
-      }
-      await supabase.from('health_metrics').upsert(healthData, { onConflict: 'user_id, date' });
-
-      for (let i = 10; i >= 1; i--) {
-        const template = templates[i % templates.length];
-        const d = new Date(); d.setDate(d.getDate() - (i + Math.floor(i * 0.4))); 
-
-        const { data: sessionData } = await supabase.from('workout_sessions').insert({
-          user_id: userId, template_id: template.id, notes: "Mock data session", created_at: d.toISOString()
-        }).select().single();
-
-        const sets = [];
-        for (let exIdx = 0; exIdx < 3; exIdx++) {
-          const exercise = exercises[exIdx];
-          const baseWeight = 20 + (10 - i) * 2.5; 
-          for (let s = 1; s <= 3; s++) {
-            sets.push({
-              user_id: userId, session_id: sessionData.id, exercise_id: exercise.id,
-              set_number: s, reps: Math.floor(Math.random() * (12 - 8) + 8), weight: baseWeight,
-              completed: true, created_at: d.toISOString()
-            });
-          }
-        }
-        await supabase.from('logged_sets').insert(sets);
-      }
-      toast.success('Mock data injected! Refreshing…');
-      setTimeout(() => window.location.reload(), 1500);
-    } catch (err) {
-      toast.error('Injection failed: ' + err.message);
-    }
-  };
-
   return (
     <div className="app-container">
       <main className="main-content">
@@ -103,7 +51,7 @@ function Layout({ session }) {
           <Route path="/workouts/new" element={<NewWorkout />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/health" element={<Health />} />
-          <Route path="/profile" element={<ProfilePage session={session} injectMockData={import.meta.env.DEV ? injectMockData : null} />} />
+          <Route path="/profile" element={<ProfilePage session={session} />} />
         </Routes>
       </main>
       <BottomNav />

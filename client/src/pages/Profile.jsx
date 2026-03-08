@@ -9,7 +9,7 @@ import { fetchGoogleFitData } from '../lib/googleFit';
 import GoalsForm from '../components/GoalsForm';
 import { formatWeightGoal, hasIncompleteGoals } from '../components/goalsUtils';
 
-export default function ProfilePage({ session, injectMockData }) {
+export default function ProfilePage({ session }) {
   const { preferences: prefs, loading: prefsLoading, savePreferences } = usePreferences();
   const { db, loadData, syncExternalSessions } = useData();
   const toast = useToast();
@@ -288,19 +288,6 @@ export default function ProfilePage({ session, injectMockData }) {
         </div>
       )}
 
-      {injectMockData && (
-        <div style={cardStyle} className="mb-4">
-          <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
-            <Database size={14} /> Data
-          </div>
-          <div className="p-4">
-            <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
-            <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
-              Inject Test Analytics
-            </button>
-          </div>
-        </div>
-      )}
 
       <div style={cardStyle} className="mb-4">
         <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
