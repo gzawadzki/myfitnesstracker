@@ -95,7 +95,9 @@ export default function Progress() {
   const totalWorkouts = db.sessions ? db.sessions.length : 0;
   
   const totalVolume = (db.sessions || []).reduce((acc, sess) => {
-    return acc + (sess.sets || []).reduce((sAcc, set) => sAcc + (Number(set.weight) * Number(set.reps)), 0);
+    return acc + (sess.sets || [])
+      .filter(set => !set.is_warmup)
+      .reduce((sAcc, set) => sAcc + (Number(set.weight) * Number(set.reps)), 0);
   }, 0);
   const volumeTons = totalVolume > 0 ? (totalVolume / 1000).toFixed(1) : 0;
 
@@ -116,7 +118,8 @@ export default function Progress() {
     const dayMetrics = db.healthMetrics?.find(m => m.date === sessDate);
     const sleep = dayMetrics ? Number(dayMetrics.sleep_hours) : 0;
     
-    const exSets = (sess.sets || []).filter(s => s.exercise_id === resolvedExerciseId);
+    // Filter out warmup sets for volume correlations
+    const exSets = (sess.sets || []).filter(s => s.exercise_id === resolvedExerciseId && !s.is_warmup);
     if (sleep >= sleepGoal) {
       wellRestedSets.push(...exSets);
     } else if (sleep > 0) {

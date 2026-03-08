@@ -120,7 +120,10 @@ export function DataProvider({ children }) {
         const exIdsInSession = [...new Set(sessSets.map(s => s.exercise_id))];
 
         exIdsInSession.forEach(exId => {
-          const exSets = sessSets.filter(s => s.exercise_id === exId);
+          // Filter out warmup sets so they don't count towards PRs or working volume history
+          const exSets = sessSets.filter(s => s.exercise_id === exId && !s.is_warmup);
+          if (exSets.length === 0) return; // Skip if only warmups were logged
+
           const maxWeight = Math.max(...exSets.map(s => Number(s.weight)));
           const avgReps = Math.round(exSets.reduce((sum, s) => sum + Number(s.reps), 0) / exSets.length);
 
@@ -224,7 +227,8 @@ export function DataProvider({ children }) {
           set_number: set.id,
           reps: Number(set.reps) || 0,
           weight: Number(set.weight) || 0,
-          completed: set.completed
+          completed: set.completed,
+          is_warmup: set.is_warmup || false
         });
       });
     });

@@ -130,7 +130,8 @@ export default function NewWorkout() {
       id: i + 1,
       reps: historicalSet ? historicalSet.reps : '',
       weight: historicalSet ? historicalSet.weight : '',
-      completed: false
+      completed: false,
+      is_warmup: false
     };
   });
 
@@ -176,7 +177,7 @@ export default function NewWorkout() {
   const addSet = () => {
     setSetsData({
       ...setsData,
-      [exercise.id]: [...currentSets, { id: currentSets.length + 1, reps: '', weight: '', completed: false }]
+      [exercise.id]: [...currentSets, { id: currentSets.length + 1, reps: '', weight: '', completed: false, is_warmup: false }]
     });
   };
 
@@ -201,6 +202,14 @@ export default function NewWorkout() {
     } else {
       setRestTimer(null);
     }
+  };
+
+  const toggleWarmup = (setId) => {
+    const set = currentSets.find(s => s.id === setId);
+    setSetsData({
+      ...setsData,
+      [exercise.id]: currentSets.map(s => s.id === setId ? { ...s, is_warmup: !set.is_warmup } : s)
+    });
   };
 
   // ─── Reorder ──────────────────────────────────────────
@@ -439,13 +448,18 @@ export default function NewWorkout() {
                 key={set.id}
                 className="flex justify-between items-center p-2 rounded"
                 style={{ 
-                  background: set.completed ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)',
-                  border: `1px solid ${set.completed ? 'var(--success)' : 'var(--surface-border)'}`,
-                  transition: 'all 0.2s'
+                  background: set.completed ? 'rgba(16, 185, 129, 0.1)' : set.is_warmup ? 'rgba(245, 158, 11, 0.05)' : 'var(--surface-color)',
+                  border: `1px solid ${set.completed ? 'var(--success)' : set.is_warmup ? 'rgba(245, 158, 11, 0.2)' : 'var(--surface-border)'}`,
+                  transition: 'all 0.2s',
+                  opacity: set.is_warmup ? 0.8 : 1
                 }}
               >
-                <div style={{ width: '40px', fontWeight: 600, color: 'var(--text-secondary)' }}>
-                  {i + 1}
+                <div 
+                  style={{ width: '40px', fontWeight: 600, color: set.is_warmup ? 'var(--warning)' : 'var(--text-secondary)', cursor: 'pointer', textAlign: 'center' }}
+                  onClick={() => toggleWarmup(set.id)}
+                  title="Toggle Warmup Set"
+                >
+                  {set.is_warmup ? 'W' : i + 1}
                 </div>
                 <div className="flex-1 px-1 text-center text-xs text-muted font-medium flex-col justify-center gap-1" style={{ display: 'flex' }}>
                   {historySet ? `${historySet.weight}kg x ${historySet.reps}` : '-'}
@@ -454,7 +468,7 @@ export default function NewWorkout() {
                   <input 
                     type="number"  
                     placeholder="-"
-                    className="w-full text-center"
+                    className={`w-full text-center ${set.is_warmup ? 'text-warning' : ''}`}
                     style={{ width: '100%', background: 'transparent', border: 'none', fontSize: '1.25rem', fontWeight: 600, padding: 0 }}
                     value={set.weight}
                     step="0.5"
@@ -466,7 +480,7 @@ export default function NewWorkout() {
                   <input 
                     type="number" 
                     placeholder="-"
-                    className="w-full text-center"
+                    className={`w-full text-center ${set.is_warmup ? 'text-warning' : ''}`}
                     style={{ width: '100%', background: 'transparent', border: 'none', fontSize: '1.25rem', fontWeight: 600, padding: 0 }}
                     value={set.reps}
                     onChange={e => updateSet(set.id, 'reps', e.target.value)}
