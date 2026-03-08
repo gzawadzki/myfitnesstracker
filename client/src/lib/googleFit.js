@@ -42,9 +42,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
       method: 'POST',
       headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
       body: JSON.stringify({
-        aggregateBy: [
-          { dataTypeName: 'com.google.step_count.delta', dataSourceId: 'derived:com.google.step_count.delta:com.google.android.gms:estimated_steps' }
-        ],
+        aggregateBy: [{ dataTypeName: 'com.google.step_count.delta' }],
         bucketByTime: { durationMillis: 86400000 },
         startTimeMillis,
         endTimeMillis: currentMillis
@@ -54,16 +52,11 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     if (resp.ok) {
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
-        for (const dataset of (bucket.dataset || [])) {
-          for (const point of (dataset.point || [])) {
-            // Use the point's actual end time for the local date bucket to fix timezone offsets
-            const pointMs = parseInt(point.endTimeNanos) / 1000000;
-            const dateKey = toDateStr(pointMs);
-            const val = point.value?.[0]?.intVal || 0;
-            if (dayMap[dateKey] && val > 0) {
-              dayMap[dateKey].steps += val;
-            }
-          }
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.intVal || 0), 0);
+        if (dayMap[dateKey] && total > 0) {
+          dayMap[dateKey].steps = total;
         }
       }
     } else {
@@ -284,20 +277,11 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     if (resp.ok) {
       const data = await resp.json();
       for (const bucket of (data.bucket || [])) {
-        for (const dataset of (bucket.dataset || [])) {
-          for (const point of (dataset.point || [])) {
-            const pointMs = parseInt(point.endTimeNanos) / 1000000;
-            const dateKey = toDateStr(pointMs);
-            const val = point.value?.[0]?.fpVal || 0;
-            if (dayMap[dateKey]) dayMap[dateKey].caloriesBurned += val;
-          }
-        }
-      }
-      
-      // Round all calories
-      for (const key of Object.keys(dayMap)) {
-        if (dayMap[key].caloriesBurned > 0) {
-          dayMap[key].caloriesBurned = Math.round(dayMap[key].caloriesBurned);
+        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+        const points = bucket.dataset?.[0]?.point || [];
+        const total = points.reduce((sum, p) => sum + (p.value?.[0]?.fpVal || 0), 0);
+        if (dayMap[dateKey] && total > 0) {
+          dayMap[dateKey].caloriesBurned = Math.round(total);
         }
       }
     }
