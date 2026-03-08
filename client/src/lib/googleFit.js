@@ -5,12 +5,19 @@
  */
 export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   const now = new Date();
+  
+  // Start exactly N days ago at 00:00:00 local time
   const startDate = new Date();
   startDate.setDate(startDate.getDate() - daysBack);
   startDate.setHours(0, 0, 0, 0);
 
+  // End exactly today at 23:59:59.999 local time 
+  // (Prevents Google Fit from dropping the final incomplete day bucket in dataset:aggregate)
+  const endDate = new Date();
+  endDate.setHours(23, 59, 59, 999);
+
   const startTimeMillis = startDate.getTime();
-  const endTimeMillis = now.getTime();
+  const endTimeMillis = endDate.getTime();
 
   // Helper: millis -> YYYY-MM-DD in local time
   const toDateStr = (ms) => {
@@ -127,28 +134,57 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   }
 
   // ─── 3. WEIGHT ──────────────────────────────────────────
-  // Try com.google.weight (raw) with daily buckets
+  // 1. Try raw merged data source to get exact chronological points (avoids bucket averaging)
   try {
-    const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
-      method: 'POST',
-      headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
-      body: JSON.stringify({
-        aggregateBy: [{ dataTypeName: 'com.google.weight' }],
-        bucketByTime: { durationMillis: 86400000 },
-        startTimeMillis,
-        endTimeMillis
-      })
+    const resp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/derived:com.google.weight:com.google.android.gms:merge_weight/datasets/${startTimeMillis}000000-${endTimeMillis}000000`, {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
     });
     if (resp.ok) {
       const data = await resp.json();
-      for (const bucket of (data.bucket || [])) {
-        const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
-        const points = bucket.dataset?.[0]?.point || [];
-        if (points.length > 0 && dayMap[dateKey]) {
-          // Sort points by timestamp to reliably get the latest measurement of the day
-          points.sort((a, b) => parseInt(a.startTimeNanos) - parseInt(b.startTimeNanos));
-          const val = points[points.length - 1]?.value?.[0]?.fpVal;
-          if (val) dayMap[dateKey].weightKg = Number(val.toFixed(1));
+      for (const point of (data.point || [])) {
+        const pointMs = parseInt(point.endTimeNanos) / 1000000;
+        const dateKey = toDateStr(pointMs);
+        if (dayMap[dateKey]) {
+          const val = point.value?.[0]?.fpVal;
+          if (val) {
+            // Replace the bucket's weight if this weigh-in is more recent
+            if (!dayMap[dateKey]._maxWeightTime || pointMs >= dayMap[dateKey]._maxWeightTime) {
+              dayMap[dateKey].weightKg = Number(val.toFixed(1));
+              dayMap[dateKey]._maxWeightTime = pointMs;
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit raw weight error:', e);
+  }
+
+  // 2. Fallback: dataset:aggregate if manual/merged dataset failed
+  try {
+    const anyHasWeight = Object.values(dayMap).some(d => d.weightKg !== null);
+    if (!anyHasWeight) {
+      const resp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataset:aggregate', {
+        method: 'POST',
+        headers: { 'Authorization': `Bearer ${accessToken}`, 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          aggregateBy: [{ dataTypeName: 'com.google.weight' }],
+          bucketByTime: { durationMillis: 86400000 },
+          startTimeMillis,
+          endTimeMillis
+        })
+      });
+      if (resp.ok) {
+        const data = await resp.json();
+        for (const bucket of (data.bucket || [])) {
+          const dateKey = toDateStr(parseInt(bucket.startTimeMillis));
+          const points = bucket.dataset?.[0]?.point || [];
+          if (points.length > 0 && dayMap[dateKey]) {
+            // Sort points by timestamp to reliably get the latest measurement of the day
+            points.sort((a, b) => parseInt(a.startTimeNanos) - parseInt(b.startTimeNanos));
+            const val = points[points.length - 1]?.value?.[0]?.fpVal;
+            if (val) dayMap[dateKey].weightKg = Number(val.toFixed(1));
+          }
         }
       }
     }
@@ -156,7 +192,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     console.warn('Google Fit weight error (non-fatal):', e);
   }
 
-  // Fallback: com.google.weight.summary
+  // 3. Fallback: com.google.weight.summary
   try {
     const anyHasWeight = Object.values(dayMap).some(d => d.weightKg !== null);
     if (!anyHasWeight) {
