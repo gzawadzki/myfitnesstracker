@@ -1,6 +1,6 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle } from 'lucide-react';
+import { AlertTriangle, Activity } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { useToast } from '../components/Toast';
@@ -30,7 +30,7 @@ export default function Dashboard() {
   const sleep = todayMetrics.sleep_hours || 0;
   const steps = todayMetrics.steps || 0;
   const weight = todayMetrics.weight || 0;
-  const heartRate = todayMetrics.heart_rate || 0;
+  const latestActivity = todayMetrics.latest_activity || '';
   const calories = todayMetrics.calories_burned || 0;
 
   const sortedMetrics = (db.healthMetrics || []).filter(m => m.weight > 0).sort((a, b) => new Date(b.date) - new Date(a.date));
@@ -56,7 +56,7 @@ export default function Dashboard() {
         if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
         if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
         if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
-        if (day.heartRate) await saveDailyHealthMetric(day.date, 'heart_rate', day.heartRate);
+        if (day.latestActivity) await saveDailyHealthMetric(day.date, 'latest_activity', day.latestActivity);
         if (day.caloriesBurned > 0) await saveDailyHealthMetric(day.date, 'calories_burned', day.caloriesBurned);
       }
       console.log('[syncGoogleFit] All saves completed!');
@@ -115,15 +115,15 @@ export default function Dashboard() {
   // Inline editing
   const startEdit = (field, currentValue) => {
     setEditingField(field);
-    setEditValue(currentValue > 0 ? String(currentValue) : '');
+    setEditValue(currentValue && currentValue !== 0 ? String(currentValue) : '');
   };
 
   const saveEdit = async () => {
     if (!editingField || editValue === '') { setEditingField(null); return; }
-    const val = parseFloat(editValue);
-    if (isNaN(val) || val <= 0) { setEditingField(null); return; }
+    const val = editingField === 'activity' ? editValue : parseFloat(editValue);
+    if (editingField !== 'activity' && (isNaN(val) || val <= 0)) { setEditingField(null); return; }
     
-    const typeMap = { sleep: 'sleep_hours', steps: 'steps', weight: 'weight', heartRate: 'heart_rate', calories: 'calories_burned' };
+    const typeMap = { sleep: 'sleep_hours', steps: 'steps', weight: 'weight', activity: 'latest_activity', calories: 'calories_burned' };
     try {
       await saveDailyHealthMetric(todayStr, typeMap[editingField], editingField === 'steps' ? parseInt(editValue) : val);
       setSavedField(editingField);
@@ -292,33 +292,34 @@ export default function Dashboard() {
 
         {/* HR + Calories row */}
         <div className="flex justify-between mt-3 pt-3" style={{ borderTop: '1px solid var(--surface-border)' }}>
-          {/* Heart Rate */}
-          <div className="flex-col items-center flex-1 text-center" onClick={() => editingField !== 'heartRate' && startEdit('heartRate', heartRate)} style={{ cursor: 'pointer' }}>
-            <span className="text-muted text-sm">Heart Rate {savedField === 'heartRate' ? <span style={{ color: 'var(--success)' }}>✓</span> : '✎'}</span>
-            {editingField === 'heartRate' ? (
+          {/* Latest Activity */}
+          <div className="flex-col items-center flex-1 text-center" onClick={() => editingField !== 'activity' && startEdit('activity', latestActivity)} style={{ cursor: 'pointer' }}>
+            <span className="text-muted text-sm flex items-center justify-center gap-1">
+              <Activity size={14} className="text-accent-secondary" /> 
+              Latest {savedField === 'activity' ? <span style={{ color: 'var(--success)' }}>✓</span> : '✎'}
+            </span>
+            {editingField === 'activity' ? (
               <input
-                type="number"
+                type="text"
                 className="mt-1 mb-1"
-                style={{ width: '80px', textAlign: 'center', fontSize: '1.25rem', fontWeight: 600, padding: '4px', background: 'var(--surface-color)', border: '1px solid var(--accent-primary)', borderRadius: '8px' }}
+                style={{ width: '120px', textAlign: 'center', fontSize: '1rem', fontWeight: 600, padding: '4px', background: 'var(--surface-color)', border: '1px solid var(--accent-primary)', borderRadius: '8px' }}
                 value={editValue}
                 onChange={e => setEditValue(e.target.value)}
                 onBlur={saveEdit}
                 onKeyDown={handleEditKeyDown}
-                placeholder="70"
+                placeholder="Walking"
                 autoFocus
               />
             ) : (
-              <div className="h2 mt-1 mb-1" style={{ color: heartRate > 0 ? (heartRate < 70 ? 'var(--success)' : heartRate < 85 ? 'var(--warning)' : 'var(--danger)') : 'var(--text-muted)' }}>
-                {heartRate > 0 ? `${heartRate}` : '—'}
+              <div className="h2 mt-1 mb-1" style={{ color: latestActivity ? 'var(--accent-secondary)' : 'var(--text-muted)', fontSize: latestActivity.length > 10 ? '1rem' : '1.5rem', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                {latestActivity || '—'}
               </div>
             )}
             <span className="badge" style={
-              heartRate === 0 ? { backgroundColor: 'var(--surface-color)', color: 'var(--text-muted)' } :
-              heartRate < 70 ? { backgroundColor: 'rgba(16, 185, 129, 0.1)', color: 'var(--success)' } :
-              heartRate < 85 ? { backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)' } :
-              { backgroundColor: 'rgba(239, 68, 68, 0.1)', color: 'var(--danger)' }
+              !latestActivity ? { backgroundColor: 'var(--surface-color)', color: 'var(--text-muted)' } :
+              { backgroundColor: 'rgba(236, 72, 153, 0.1)', color: 'var(--accent-secondary)' }
             }>
-              {heartRate === 0 ? 'Not logged' : heartRate < 70 ? 'Resting' : heartRate < 85 ? 'Normal' : 'Elevated'}
+              {latestActivity ? 'Movement' : 'No Activity'}
             </span>
           </div>
           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>

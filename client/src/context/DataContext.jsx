@@ -311,7 +311,7 @@ export function DataProvider({ children }) {
   };
 
   const saveDailyHealthMetric = async (dateStr, type, value) => {
-    // type can be 'sleep_hours', 'steps', or 'weight'
+    // type can be 'sleep_hours', 'steps', 'weight', 'heart_rate', 'calories_burned', or 'latest_activity'
     const { data: { session: currentSession } } = await supabase.auth.getSession();
     const userId = currentSession?.user?.id;
     if (!userId) throw new Error("Not logged in");
@@ -334,6 +334,7 @@ export function DataProvider({ children }) {
       weight_unit: existing?.weight_unit ?? null,
       heart_rate: existing?.heart_rate ?? null,
       calories_burned: existing?.calories_burned ?? null,
+      latest_activity: existing?.latest_activity ?? null,
     };
     mergedPayload[type] = value;
 

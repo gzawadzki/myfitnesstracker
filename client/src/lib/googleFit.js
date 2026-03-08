@@ -1,8 +1,28 @@
 /**
  * Fetches health data from Google Fit for the last N days.
- * Returns an array of { date, steps, sleepHours, weightKg } objects, one per day.
+ * Returns an array of { date, steps, sleepHours, weightKg, latestActivity } objects, one per day.
  * Each entry is keyed to its ACTUAL date so callers can save to the correct row.
  */
+
+const ACTIVITY_TYPES = {
+  0: 'In vehicle',
+  1: 'Biking',
+  2: 'On foot',
+  3: 'Still',
+  4: 'Unknown',
+  5: 'Tilting',
+  7: 'Walking',
+  8: 'Running',
+  9: 'Aerobics',
+  10: 'Badminton',
+  11: 'Baseball',
+  12: 'Basketball',
+  13: 'Biathlon',
+  57: 'Strength Training',
+  58: 'Swimming',
+  83: 'Yoga'
+};
+
 export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   const now = new Date();
   
@@ -33,7 +53,7 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
     const d = new Date();
     d.setDate(d.getDate() - i);
     const key = toDateStr(d.getTime());
-    dayMap[key] = { date: key, steps: 0, sleepHours: 0, weightKg: null, heartRate: null, caloriesBurned: 0 };
+    dayMap[key] = { date: key, steps: 0, sleepHours: 0, weightKg: null, heartRate: null, caloriesBurned: 0, latestActivity: null };
   }
 
   // ─── 1. STEPS ───────────────────────────────────────────
@@ -436,7 +456,57 @@ export async function fetchGoogleFitData(accessToken, daysBack = 7) {
   }
   console.log('[Calories] Final:', Object.entries(dayMap).map(([k,v]) => `${k}:${v.caloriesBurned}`).join(', '));
 
-  const results = Object.values(dayMap);
-  console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0));
+  // ─── 6. LATEST ACTIVITY ──────────────────────────────────
+  try {
+    const activityResp = await fetch('https://www.googleapis.com/fitness/v1/users/me/dataSources?dataTypeName=com.google.activity.segment', {
+      headers: { 'Authorization': `Bearer ${accessToken}` }
+    });
+    
+    if (activityResp.ok) {
+      const data = await activityResp.json();
+      const sources = data.dataSource || [];
+      
+      for (const source of sources) {
+        const streamId = source.dataStreamId;
+        const encodedId = encodeURIComponent(streamId);
+        const pointsResp = await fetch(`https://www.googleapis.com/fitness/v1/users/me/dataSources/${encodedId}/datasets/${startTimeMillis}000000-${rawEndTimeMillis}000000`, {
+          headers: { 'Authorization': `Bearer ${accessToken}` }
+        });
+        
+        if (pointsResp.ok) {
+          const pointsData = await pointsResp.json();
+          for (const point of (pointsData.point || [])) {
+            const pointMs = parseInt(point.endTimeNanos) / 1000000;
+            const dateKey = toDateStr(pointMs);
+            const typeId = point.value?.[0]?.intVal;
+            
+            // Skip "Still" (3) or "Unknown" (4) if we want meaningful activities
+            if (typeId !== undefined && typeId !== 3 && typeId !== 4) {
+              const activityName = ACTIVITY_TYPES[typeId] || `Activity ${typeId}`;
+              
+              // Only update if this point is LATER than what we already have for this day
+              const current = dayMap[dateKey];
+              if (current) {
+                if (!current._latestActivityMs || pointMs > current._latestActivityMs) {
+                  current.latestActivity = activityName;
+                  current._latestActivityMs = pointMs;
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  } catch (e) {
+    console.warn('Google Fit activity fetch error:', e);
+  }
+
+  const results = Object.values(dayMap).map(d => {
+    // Clean up internal tracking fields
+    const { _latestActivityMs, ...rest } = d;
+    return rest;
+  });
+
+  console.log('[Google Fit Sync] Per-day results:', results.filter(r => r.steps > 0 || r.sleepHours > 0 || r.weightKg || r.heartRate || r.caloriesBurned > 0 || r.latestActivity));
   return results;
 }
