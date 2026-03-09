@@ -110,8 +110,8 @@ export function calculateReadinessScore(healthMetrics = [], sessions = [], prefs
 }
 
 export function getReadinessSuggestion(score) {
-  if (score >= 80) return { label: 'Gotowy', text: 'Świetny dzień na ciężki trening', color: 'var(--success)' }
-  if (score >= 60) return { label: 'Umiarkowany', text: 'Możesz trenować, zachowaj czułość', color: 'var(--warning)' }
-  if (score >= 40) return { label: 'Ostrożnie', text: 'Rozważ lżejszą sesję lub regenerację', color: 'var(--accent-primary)' }
-  return { label: 'Odpocznij', text: 'Dzisiaj odpoczynek to klucz', color: 'var(--danger)' }
+  if (score >= 80) return { label: 'Ready', text: 'Great day for a heavy session', color: 'var(--success)' }
+  if (score >= 60) return { label: 'Moderate', text: 'You can train, but listen to your body', color: 'var(--warning)' }
+  if (score >= 40) return { label: 'Cautious', text: 'Consider a lighter session or recovery', color: 'var(--accent-primary)' }
+  return { label: 'Rest', text: 'Rest is key today', color: 'var(--danger)' }
 }

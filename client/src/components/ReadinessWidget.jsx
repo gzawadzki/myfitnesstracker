@@ -44,7 +44,7 @@ export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
 
       {expanded && (
         <div className="mt-5 pt-4 border-t border-[var(--surface-border)] animate-fade-in">
-          <p className="text-xs text-secondary mb-3 uppercase tracking-wider">Składowe wyniku</p>
+          <p className="text-xs text-secondary mb-3 uppercase tracking-wider">Score Breakdown</p>
           <div className="grid grid-cols-2 gap-3">
             
             {/* Sleep Component */}
@@ -53,7 +53,7 @@ export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
                 <BedSingle size={18} />
               </div>
               <div>
-                <div className="text-xs text-muted">Sen (35%)</div>
+                <div className="text-xs text-muted">Sleep (35%)</div>
                 <div className="font-bold">{breakdown.sleep} / 35</div>
               </div>
             </div>
@@ -64,7 +64,7 @@ export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
                 <Activity size={18} />
               </div>
               <div>
-                <div className="text-xs text-muted">Spoczynkowe HR (25%)</div>
+                <div className="text-xs text-muted">Resting HR (25%)</div>
                 <div className="font-bold">{breakdown.hr} / 25</div>
               </div>
             </div>
@@ -75,7 +75,7 @@ export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
                 <Beaker size={18} />
               </div>
               <div>
-                <div className="text-xs text-muted">Regeneracja (20%)</div>
+                <div className="text-xs text-muted">Recovery (20%)</div>
                 <div className="font-bold">{breakdown.rest} / 20</div>
               </div>
             </div>
@@ -86,7 +86,7 @@ export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
                 <Footprints size={18} />
               </div>
               <div>
-                <div className="text-xs text-muted">Aktywność w tle (20%)</div>
+                <div className="text-xs text-muted">Background Activity (20%)</div>
                 <div className="font-bold">{breakdown.steps} / 20</div>
               </div>
             </div>
