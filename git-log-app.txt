@@ -1,0 +1,2265 @@
+﻿commit 2bb332dc59972cda5a4838819a9408328969e7f2
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Mon Mar 9 00:02:52 2026 +0100
+
+    Cleanup: Remove unused mock data injection args, old dev scripts, and redundant db seeds
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index bbc79ab..8d0ed02 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -41,58 +41,6 @@ function Layout({ session }) {
+     );
+   }
+ 
+-  const injectMockData = async () => {
+-    try {
+-      if(!window.confirm("Inject 14 days of mock workouts and health data into your account?")) return;
+-      
+-      const userId = (await supabase.auth.getSession()).data.session?.user?.id;
+-      if (!userId) throw new Error("No active session");
+-
+-      const { data: templates } = await supabase.from('workout_templates').select('*').limit(5);
+-      const { data: exercises } = await supabase.from('exercises').select('*').limit(20);
+-
+-      const healthData = [];
+-      for (let i = 14; i >= 0; i--) {
+-        const d = new Date();
+-        d.setDate(d.getDate() - i);
+-        healthData.push({
+-          user_id: userId,
+-          date: d.toISOString().split('T')[0],
+-          sleep_hours: (Math.random() * (9 - 5) + 5).toFixed(1),
+-          steps: Math.floor(Math.random() * (12000 - 3000) + 3000)
+-        });
+-      }
+-      await supabase.from('health_metrics').upsert(healthData, { onConflict: 'user_id, date' });
+-
+-      for (let i = 10; i >= 1; i--) {
+-        const template = templates[i % templates.length];
+-        const d = new Date(); d.setDate(d.getDate() - (i + Math.floor(i * 0.4))); 
+-
+-        const { data: sessionData } = await supabase.from('workout_sessions').insert({
+-          user_id: userId, template_id: template.id, notes: "Mock data session", created_at: d.toISOString()
+-        }).select().single();
+-
+-        const sets = [];
+-        for (let exIdx = 0; exIdx < 3; exIdx++) {
+-          const exercise = exercises[exIdx];
+-          const baseWeight = 20 + (10 - i) * 2.5; 
+-          for (let s = 1; s <= 3; s++) {
+-            sets.push({
+-              user_id: userId, session_id: sessionData.id, exercise_id: exercise.id,
+-              set_number: s, reps: Math.floor(Math.random() * (12 - 8) + 8), weight: baseWeight,
+-              completed: true, created_at: d.toISOString()
+-            });
+-          }
+-        }
+-        await supabase.from('logged_sets').insert(sets);
+-      }
+-      toast.success('Mock data injected! RefreshingÔÇª');
+-      setTimeout(() => window.location.reload(), 1500);
+-    } catch (err) {
+-      toast.error('Injection failed: ' + err.message);
+-    }
+-  };
+-
+   return (
+     <div className="app-container">
+       <main className="main-content">
+@@ -103,7 +51,7 @@ function Layout({ session }) {
+           <Route path="/workouts/new" element={<NewWorkout />} />
+           <Route path="/progress" element={<Progress />} />
+           <Route path="/health" element={<Health />} />
+-          <Route path="/profile" element={<ProfilePage session={session} injectMockData={import.meta.env.DEV ? injectMockData : null} />} />
++          <Route path="/profile" element={<ProfilePage session={session} />} />
+         </Routes>
+       </main>
+       <BottomNav />
+
+commit 8ecc185482142daea2ab58bc4d8011d5b645e15c
+Author: Grzegorz Zawadzki <49599616+gzawadzki@users.noreply.github.com>
+Date:   Sat Mar 7 21:34:01 2026 +0100
+
+    Refactor data loading into parallel scoped fetches
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 9d64dd6..bbc79ab 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -15,10 +15,10 @@ import Health from './pages/Health';
+ import ProfilePage from './pages/Profile';
+ 
+ function Layout({ session }) {
+-  const { loading, error } = useData();
++  const { appReady, error } = useData();
+   const toast = useToast();
+ 
+-  if (loading) {
++  if (!appReady) {
+     return (
+       <div className="app-container flex items-center justify-center p-6 text-center">
+         <div className="animate-fade-in">
+
+commit 2559981e34dcb377190c3e6443eccde72dff495e
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 19:49:17 2026 +0100
+
+    feat: UX review improvements - toast system, inline inputs, dashboard polish, health polish
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 092b85e..9d64dd6 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -3,6 +3,7 @@ import { HashRouter, Routes, Route } from 'react-router-dom';
+ import { Activity } from 'lucide-react';
+ import { supabase } from './lib/supabase';
+ import { useData } from './context/DataContext';
++import { useToast } from './components/Toast';
+ import Login from './pages/Login';
+ import BottomNav from './components/BottomNav';
+ import Dashboard from './pages/Dashboard';
+@@ -15,6 +16,7 @@ import ProfilePage from './pages/Profile';
+ 
+ function Layout({ session }) {
+   const { loading, error } = useData();
++  const toast = useToast();
+ 
+   if (loading) {
+     return (
+@@ -84,10 +86,10 @@ function Layout({ session }) {
+         }
+         await supabase.from('logged_sets').insert(sets);
+       }
+-      alert("Ô£à Mock Data Setup Complete! Refresh the app to view Analytics.");
+-      window.location.reload();
++      toast.success('Mock data injected! RefreshingÔÇª');
++      setTimeout(() => window.location.reload(), 1500);
+     } catch (err) {
+-      alert("Injection Failed: " + err.message);
++      toast.error('Injection failed: ' + err.message);
+     }
+   };
+ 
+@@ -101,7 +103,7 @@ function Layout({ session }) {
+           <Route path="/workouts/new" element={<NewWorkout />} />
+           <Route path="/progress" element={<Progress />} />
+           <Route path="/health" element={<Health />} />
+-          <Route path="/profile" element={<ProfilePage session={session} injectMockData={injectMockData} />} />
++          <Route path="/profile" element={<ProfilePage session={session} injectMockData={import.meta.env.DEV ? injectMockData : null} />} />
+         </Routes>
+       </main>
+       <BottomNav />
+
+commit 74acccdeae17b8d90646917d1b30f3344f4b6c19
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 19:14:10 2026 +0100
+
+    refactor: ARCH-01 thru ARCH-05 - extract components from App.jsx, remove dead code, dynamic sleep goal, increase session limit
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 9b97b4c..092b85e 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,558 +1,17 @@
+ import React, { useState, useEffect } from 'react';
+-import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+-import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
+-import { usePreferences } from './hooks/usePreferences';
++import { HashRouter, Routes, Route } from 'react-router-dom';
++import { Activity } from 'lucide-react';
++import { supabase } from './lib/supabase';
++import { useData } from './context/DataContext';
++import Login from './pages/Login';
++import BottomNav from './components/BottomNav';
++import Dashboard from './pages/Dashboard';
++import WorkoutLog from './pages/WorkoutLog';
++import WorkoutSelect from './pages/WorkoutSelect';
+ import NewWorkout from './pages/NewWorkout';
+ import Progress from './pages/Progress';
+ import Health from './pages/Health';
+-import { useData } from './context/DataContext';
+-import { useGoogleLogin } from '@react-oauth/google';
+-import { fetchGoogleFitData } from './lib/googleFit';
+-import { supabase } from './lib/supabase';
+-import Login from './pages/Login';
+-import { Trash2 } from 'lucide-react'; // Added Trash2
+-
+-// ... BottomNav code ...
+-
+-function BottomNav() {
+-  const location = useLocation();
+-  const path = location.pathname;
+-
+-  return (
+-    <nav className="bottom-nav">
+-      <Link to="/" className={`nav-item ${path === '/' ? 'active' : ''}`}>
+-        <Home size={24} />
+-        <span>Home</span>
+-      </Link>
+-      <Link to="/workouts" className={`nav-item ${path === '/workouts' && !path.includes('/new') && !path.includes('/select') ? 'active' : ''}`}>
+-        <Activity size={24} />
+-        <span>Log</span>
+-      </Link>
+-      <div style={{ position: 'relative', top: '-15px' }}>
+-        <Link to="/workouts/select" className="btn btn-primary btn-icon" style={{ padding: '12px', boxShadow: 'var(--shadow-lg)' }}>
+-          <Plus size={28} color="white" />
+-        </Link>
+-      </div>
+-      <Link to="/progress" className={`nav-item ${path === '/progress' ? 'active' : ''}`}>
+-        <LineChart size={24} />
+-        <span>Progress</span>
+-      </Link>
+-      <Link to="/health" className={`nav-item ${path === '/health' ? 'active' : ''}`}>
+-        <HeartPulse size={24} />
+-        <span>Health</span>
+-      </Link>
+-    </nav>
+-  );
+-}
+-
+-function Dashboard() {
+-  const { db, saveDailyHealthMetric } = useData();
+-  const { preferences: prefs, loading: prefsLoading } = usePreferences();
+-  const [gfitToken, setGfitToken] = useState(null);
+-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+-  const [googleLoading, setGoogleLoading] = useState(false);
+-  const [syncStatus, setSyncStatus] = useState(null); // 'success' | 'error' | null
+-
+-  // Get today's local date string (YYYY-MM-DD)
+-  const todayRaw = new Date();
+-  const offset = todayRaw.getTimezoneOffset() * 60000;
+-  const todayStr = (new Date(todayRaw - offset)).toISOString().split('T')[0];
+-  const todayMetrics = db.healthMetrics?.find(m => m.date === todayStr) || {};
+-  
+-  const sleep = todayMetrics.sleep_hours || 0;
+-  const steps = todayMetrics.steps || 0;
+-  const weight = todayMetrics.weight || 0;
+-
+-  // Weight delta vs previous entry
+-  const sortedMetrics = (db.healthMetrics || []).filter(m => m.weight > 0).sort((a, b) => new Date(b.date) - new Date(a.date));
+-  const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
+-  const weightDelta = (weight && prevWeight) ? (weight - prevWeight).toFixed(1) : null;
+-
+-  // Shared sync function ÔÇö works with any valid token
+-  const syncGoogleFit = async (token) => {
+-    setGoogleLoading(true);
+-    setSyncStatus(null);
+-    try {
+-      const dailyResults = await fetchGoogleFitData(token, 7);
+-      for (const day of dailyResults) {
+-        if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
+-        if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
+-        if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
+-      }
+-      setSyncStatus('success');
+-      setTimeout(() => setSyncStatus(null), 3000);
+-    } catch (err) {
+-      console.error("Google Fit sync failed:", err);
+-      // Token expired ÔÇö clear it so user re-auths
+-      setGfitToken(null);
+-      setIsGoogleConnected(false);
+-      setSyncStatus('error');
+-    } finally {
+-      setGoogleLoading(false);
+-    }
+-  };
+-
+-  const loginGoogleFit = useGoogleLogin({
+-    onSuccess: async (tokenResponse) => {
+-      setGfitToken(tokenResponse.access_token);
+-      setIsGoogleConnected(true);
+-      await syncGoogleFit(tokenResponse.access_token);
+-    },
+-    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
+-    onError: error => console.error('Login Failed:', error)
+-  });
+-
+-  // "Sync Now" handler ÔÇö uses stored token, falls back to re-login
+-  const handleSyncNow = async () => {
+-    if (gfitToken) {
+-      await syncGoogleFit(gfitToken);
+-    } else {
+-      loginGoogleFit();
+-    }
+-  };
+-  
+-  const nextWorkout = db.workouts && db.workouts.length > 0 ? db.workouts[0] : null;
+-  const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
+-
+-  const formatSleep = (hoursDec) => {
+-    if (!hoursDec) return "0h 0m";
+-    const h = Math.floor(hoursDec);
+-    const m = Math.round((hoursDec - h) * 60);
+-    return `${h}h ${m}m`;
+-  };
+-
+-  if (prefsLoading) return <div className="p-4 text-center text-muted">Loading dashboard...</div>;
+-
+-  return (
+-    <div className="animate-fade-in">
+-      <div className="flex justify-between items-center mb-6">
+-        <div>
+-          <h1 className="h1 mb-1">Overview</h1>
+-          <p className="text-secondary">Welcome back, Athlete!</p>
+-        </div>
+-        <Link to="/profile">
+-          <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
+-        </Link>
+-      </div>
+-
+-      <div className="card mb-6 glass">
+-        <h2 className="h3 flex justify-between items-center mb-2">
+-          Today's Readiness
+-          <div className="flex flex-col items-end gap-1">
+-            <button 
+-              className="badge text-xs px-2 py-1 cursor-pointer"
+-              style={{ 
+-                background: isGoogleConnected ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)', 
+-                color: isGoogleConnected ? 'var(--success)' : 'var(--text-primary)', 
+-                border: `1px solid ${isGoogleConnected ? 'rgba(16, 185, 129, 0.3)' : 'var(--surface-border)'}` 
+-              }}
+-              onClick={handleSyncNow}
+-              disabled={googleLoading}
+-            >
+-              {googleLoading ? 'Syncing...' : isGoogleConnected ? 'Ôå╗ Sync Now' : 'Connect Google Fit'}
+-            </button>
+-            {syncStatus === 'success' && <span className="text-[10px] text-success">Synced Ô£ô</span>}
+-            {syncStatus === 'error' && <span className="text-[10px] text-warning">Token expired ÔÇö tap to reconnect</span>}
+-          </div>
+-        </h2>
+-        {/* Google Fit Deprecation Warning */}
+-        <div className="flex items-center gap-2 mb-4 p-2 rounded text-xs text-warning" style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
+-          <AlertTriangle size={14} className="flex-shrink-0" />
+-          <span>Google Fit sync will stop working in 2026. Manual entry is recommended.</span>
+-        </div>
+-
+-        <div className="flex justify-between mt-4">
+-          <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 0);
+-            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'sleep_hours', parseFloat(val));
+-          }}>
+-            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Sleep Ô£Ä</span>
+-            <div className="h2 mt-1 mb-1" style={{ color: sleep >= 7 ? 'var(--success)' : 'var(--warning)' }}>
+-              {formatSleep(sleep)}
+-            </div>
+-            <span className={`badge ${sleep >= 7 ? 'badge-success' : ''}`} style={sleep < 7 ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+-              {sleep >= 7 ? 'Optimal' : 'Low'}
+-            </span>
+-          </div>
+-          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+-          <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter today's steps:", steps || 0);
+-            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
+-          }}>
+-            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
+-            <div className="h2 mt-1 mb-1" style={{ color: steps >= (prefs?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
+-              {steps.toLocaleString()}
+-            </div>
+-            <span className={`badge ${steps >= (prefs?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (prefs?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+-              {steps >= (prefs?.step_goal || 8000) ? 'Active' : 'Recovery'}
+-            </span>
+-          </div>
+-          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+-          <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter today's weight (kg):", weight || '');
+-            if(val && !isNaN(val) && parseFloat(val) > 0) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
+-          }}>
+-            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Weight Ô£Ä</span>
+-            <div className="h2 mt-1 mb-1 text-white">
+-              {weight > 0 ? `${weight}kg` : 'ÔÇö kg'}
+-            </div>
+-            {weightDelta !== null ? (
+-              <span className="badge text-[10px]" style={{
+-                backgroundColor: Number(weightDelta) > 0 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
+-                color: Number(weightDelta) > 0 ? 'var(--warning)' : 'var(--success)'
+-              }}>
+-                {Number(weightDelta) > 0 ? '+' : ''}{weightDelta}kg vs prev
+-              </span>
+-            ) : (
+-              <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
+-                Log
+-              </span>
+-            )}
+-          </div>
+-        </div>
+-      </div>
+-
+-      <h2 className="h2 mb-4">Next Workout</h2>
+-      {nextWorkout ? (
+-        <div className="card">
+-          <div className="flex justify-between items-start mb-4">
+-            <div>
+-              <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase?.name}</span>
+-              <h3 className="h3">{nextWorkout.name}</h3>
+-              <p className="text-secondary text-sm">{nextWorkout.exercises?.length} Exercises</p>
+-            </div>
+-          </div>
+-          <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
+-            Start Workout
+-          </Link>
+-        </div>
+-      ) : (
+-        <div className="card text-center text-muted p-6">
+-          No workouts available. Please import your training plan.
+-        </div>
+-      )}
+-    </div>
+-  );
+-}
+-
+-function WorkoutLog() {
+-  const { db, deleteWorkoutSession } = useData();
+-  const [expandedSessionId, setExpandedSessionId] = useState(null);
+-  const [deletingId, setDeletingId] = useState(null);
+-
+-  // Sort and display the latest sessions we fetched from Context
+-  // We need to map the session template_id back to actual workout names
+-  const sessions = [...(db.sessions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+-
+-  const formatShortDate = (isoString) => {
+-    return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+-  };
+-
+-  const toggleExpand = (id) => {
+-    if (expandedSessionId === id) setExpandedSessionId(null);
+-    else setExpandedSessionId(id);
+-  };
+-
+-  return (
+-    <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
+-      <header className="mb-6">
+-        <h1 className="h1 mx-4 mt-4 mb-1">Workout Log</h1>
+-        <p className="text-secondary mx-4">History of your completed sessions.</p>
+-      </header>
+-
+-      <div className="flex-col gap-3 mx-4">
+-        {sessions.length === 0 ? (
+-          <div className="text-center text-muted text-sm mt-8">No workouts logged yet.</div>
+-        ) : (
+-          sessions.map(session => {
+-            const template = db.workouts && db.workouts.find(w => w.id === session.template_id);
+-            const templateName = template ? template.name : "Unknown Workout";
+-            const isExpanded = expandedSessionId === session.id;
+-            
+-            // Group session sets by exercise ID to display
+-            const setsByExercise = {};
+-            if (session.sets) {
+-              session.sets.forEach(s => {
+-                if (!setsByExercise[s.exercise_id]) {
+-                  setsByExercise[s.exercise_id] = [];
+-                }
+-                setsByExercise[s.exercise_id].push(s);
+-              });
+-            }
+-
+-            return (
+-              <div key={session.id} className="card glass mb-3" style={{ padding: 0, overflow: 'hidden' }}>
+-                <div 
+-                  className="flex justify-between items-center p-4 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
+-                  style={{ background: isExpanded ? 'var(--surface-hover)' : 'transparent' }}
+-                  onClick={() => toggleExpand(session.id)}
+-                >
+-                  <div>
+-                    <h3 className="h3 mb-1 text-sm">{templateName}</h3>
+-                    <p className="text-xs text-muted">{formatShortDate(session.created_at)}</p>
+-                  </div>
+-                  <div className="flex items-center gap-2">
+-                    {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
+-                    <button 
+-                      className="p-1 text-muted hover:text-warning transition-colors"
+-                      onClick={async (e) => {
+-                        e.stopPropagation();
+-                        if(window.confirm("Are you sure you want to delete this workout?")) {
+-                          try {
+-                            setDeletingId(session.id);
+-                            await deleteWorkoutSession(session.id);
+-                          } catch (err) {
+-                            alert("Failed to delete: " + err.message);
+-                            setDeletingId(null);
+-                          }
+-                        }
+-                      }}
+-                      disabled={deletingId === session.id}
+-                    >
+-                      <Trash2 size={16} />
+-                    </button>
+-                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)', marginLeft: '4px' }}>Ôû╝</span>
+-                  </div>
+-                </div>
+-                
+-                {isExpanded && (
+-                  <div className="p-4" style={{ borderTop: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.1)' }}>
+-                    {session.notes && (
+-                      <div className="mb-4">
+-                        <div className="text-xs text-secondary font-medium mb-1">Notes:</div>
+-                        <div className="text-sm italic" style={{ borderLeft: '2px solid var(--accent-primary)', paddingLeft: '8px' }}>
+-                          "{session.notes}"
+-                        </div>
+-                      </div>
+-                    )}
+-
+-                    {(session.health_sleep_hours || session.health_steps) && (
+-                      <div className="flex gap-2 mb-4">
+-                        {session.health_sleep_hours && (
+-                          <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
+-                            ­ƒÆñ {session.health_sleep_hours}h
+-                          </div>
+-                        )}
+-                        {session.health_steps && (
+-                          <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
+-                            ­ƒæƒ {session.health_steps.toLocaleString()}
+-                          </div>
+-                        )}
+-                      </div>
+-                    )}
+-                    
+-                    {Object.keys(setsByExercise).length > 0 ? (
+-                      <div className="flex-col gap-3">
+-                        {Object.keys(setsByExercise).map(exId => {
+-                          const exInfo = db.exercises[exId];
+-                          const exName = exInfo ? exInfo.name : exId;
+-                          const exSets = setsByExercise[exId];
+-                          
+-                          return (
+-                            <div key={exId}>
+-                              <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{exName}</div>
+-                              <div className="flex flex-wrap gap-2">
+-                                {exSets.map((s, i) => (
+-                                  <div key={i} className="badge text-[10px]" style={{ padding: '2px 6px', background: s.completed ? 'var(--surface-color)' : 'rgba(239, 68, 68, 0.1)', color: s.completed ? 'var(--text-secondary)' : 'var(--warning)', border: '1px solid var(--surface-border)' }}>
+-                                    {s.weight}kg x {s.reps} {!s.completed && '(Missed)'}
+-                                  </div>
+-                                ))}
+-                              </div>
+-                            </div>
+-                          );
+-                        })}
+-                      </div>
+-                    ) : (
+-                      <div className="text-xs text-muted">No exercises recorded for this session.</div>
+-                    )}
+-                  </div>
+-                )}
+-              </div>
+-            );
+-          })
+-        )}
+-      </div>
+-    </div>
+-  );
+-}
+-
+-function WorkoutSelect() {
+-  const { db } = useData();
+-  const hasPhases = db.phases && db.phases.length > 0;
+-  const [selectedPhaseId, setSelectedPhaseId] = useState(hasPhases ? db.phases[0].id : null);
+-
+-  if (!hasPhases) {
+-    return (
+-      <div className="animate-fade-in text-center p-6 text-muted">
+-        No workouts found in the database.
+-      </div>
+-    );
+-  }
+-
+-  return (
+-    <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
+-      <header className="mb-6">
+-        <h1 className="h1 mb-1">Select Workout</h1>
+-        <p className="text-secondary">Choose a workout from your plan.</p>
+-      </header>
+-
+-      {/* Phase Selector */}
+-      <div className="flex gap-2 mb-6" style={{ overflowX: 'auto', paddingBottom: '8px' }}>
+-        {db.phases.map((phase) => (
+-          <div 
+-            key={phase.id}
+-            onClick={() => setSelectedPhaseId(phase.id)}
+-            style={{
+-              flexShrink: 0,
+-              padding: '6px 12px',
+-              borderRadius: 'var(--radius-full)',
+-              fontSize: '0.875rem',
+-              fontWeight: 500,
+-              cursor: 'pointer',
+-              background: phase.id === selectedPhaseId ? 'var(--gradient-main)' : 'var(--surface-color)',
+-              color: phase.id === selectedPhaseId ? 'white' : 'var(--text-secondary)',
+-              border: `1px solid ${phase.id === selectedPhaseId ? 'transparent' : 'var(--surface-border)'}`
+-            }}
+-          >
+-            {phase.name.split(' ')[0]} {phase.name.split(' ')[1]}
+-          </div>
+-        ))}
+-      </div>
+-
+-      {/* Workout List */}
+-      <div className="flex-col gap-3">
+-        {db.workouts.filter(w => w.phaseId === selectedPhaseId).map(workout => (
+-          <Link key={workout.id} to={`/workouts/new?id=${workout.id}`}>
+-            <div className="card glass flex justify-between items-center hover:var(--surface-hover) transition-colors p-4">
+-              <div>
+-                <h3 className="h3 mb-1 text-sm">{workout.name}</h3>
+-                <p className="text-xs text-muted">{workout.exercises.length} Exercises</p>
+-              </div>
+-              <Plus size={20} className="text-accent-primary" />
+-            </div>
+-          </Link>
+-        ))}
+-      </div>
+-    </div>
+-  );
+-}
+-
+-function ProfilePage({ session, injectMockData }) {
+-  const { preferences: prefs, loading: prefsLoading } = usePreferences();
+-  const user = session?.user;
+-  const email = user?.email || '';
+-  const initials = email
+-    .split('@')[0]
+-    .split(/[._-]/)
+-    .map(p => p.charAt(0).toUpperCase())
+-    .slice(0, 2)
+-    .join('');
+-  const memberSince = user?.created_at
+-    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
+-    : 'ÔÇö';
+-
+-  const cardStyle = {
+-    background: 'rgba(26, 26, 31, 0.85)',
+-    boxShadow: 'var(--shadow-md)',
+-    border: '1px solid var(--surface-border)',
+-    borderRadius: 'var(--radius-xl)',
+-    overflow: 'hidden'
+-  };
+-
+-  return (
+-    <div className="animate-fade-in p-4 pb-24">
+-      {/* Avatar + Name */}
+-      <div className="flex flex-col items-center text-center mt-4 mb-8">
+-        <div style={{
+-          width: '88px', height: '88px', borderRadius: '50%',
+-          background: 'var(--gradient-main)',
+-          display: 'flex', alignItems: 'center', justifyContent: 'center',
+-          fontSize: '2rem', fontWeight: 700, color: '#fff',
+-          marginBottom: '16px',
+-          boxShadow: 'var(--shadow-glow)'
+-        }}>
+-          {initials || '?'}
+-        </div>
+-        <h1 className="h2 mb-1">My Profile</h1>
+-        <span className="text-secondary text-sm">{email}</span>
+-      </div>
+-
+-      {/* Account Info */}
+-      <div style={cardStyle} className="mb-4">
+-        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+-          <User size={14} /> Account
+-        </div>
+-        <div className="p-4 flex flex-col gap-3">
+-          <div className="flex justify-between items-center text-sm">
+-            <span className="text-muted">Email</span>
+-            <span className="font-medium" style={{ maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
+-          </div>
+-          <div className="flex justify-between items-center text-sm">
+-            <span className="text-muted">Member Since</span>
+-            <span className="font-medium">{memberSince}</span>
+-          </div>
+-          <div className="flex justify-between items-center text-sm">
+-            <span className="text-muted">Status</span>
+-            <span className="badge badge-success text-[10px]">Active</span>
+-          </div>
+-        </div>
+-      </div>
+-
+-      {/* Preferences Summary */}
+-      <div style={cardStyle} className="mb-4">
+-        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+-          <HeartPulse size={14} /> My Goals
+-        </div>
+-        {prefsLoading ? (
+-          <div className="p-4 animate-pulse">
+-            <div className="h-4 bg-black/20 rounded w-2/3 mb-2"></div>
+-            <div className="h-4 bg-black/20 rounded w-1/2"></div>
+-          </div>
+-        ) : (
+-          <div className="p-4 flex gap-3">
+-            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+-              <div className="text-xs text-muted mb-1">Sleep</div>
+-              <div className="text-lg font-bold text-white">{prefs?.sleep_goal ?? 7.5}h</div>
+-            </div>
+-            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+-              <div className="text-xs text-muted mb-1">Steps</div>
+-              <div className="text-lg font-bold text-white">{((prefs?.step_goal ?? 8000) / 1000).toFixed(1)}k</div>
+-            </div>
+-            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
+-              <div className="text-xs text-muted mb-1">Weight</div>
+-              <div className="text-lg font-bold text-white">{prefs?.weight_goal ?? 'ÔÇö'}{prefs?.weight_goal ? (prefs?.weight_goal_unit || 'kg') : ''}</div>
+-            </div>
+-          </div>
+-        )}
+-        <div className="px-4 pb-4">
+-          <Link to="/health" className="text-xs text-accent-primary hover:underline">Edit goals in Health tab ÔåÆ</Link>
+-        </div>
+-      </div>
+-
+-      {/* Data Management */}
+-      <div style={cardStyle} className="mb-4">
+-        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
+-          <Database size={14} /> Data
+-        </div>
+-        <div className="p-4">
+-          <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
+-          <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
+-            Inject Test Analytics
+-          </button>
+-        </div>
+-      </div>
+-
+-      {/* Sign Out */}
+-      <button
+-        className="btn w-full flex justify-center items-center gap-2 mt-2"
+-        style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '14px', borderRadius: 'var(--radius-xl)' }}
+-        onClick={() => supabase.auth.signOut()}
+-      >
+-        <LogOut size={18} /> Sign Out
+-      </button>
+-    </div>
+-  );
+-}
++import ProfilePage from './pages/Profile';
+ 
+ function Layout({ session }) {
+   const { loading, error } = useData();
+
+commit f147df1bbc7851276015851bafa33986c585bce2
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 19:04:32 2026 +0100
+
+    fix: BUG-01 thru BUG-05 - remove hardcoded health data, add user_id filter, fix XSS token, dynamic exercise selection
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index b191d07..9b97b4c 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -48,7 +48,8 @@ function BottomNav() {
+ function Dashboard() {
+   const { db, saveDailyHealthMetric } = useData();
+   const { preferences: prefs, loading: prefsLoading } = usePreferences();
+-  const [isGoogleConnected, setIsGoogleConnected] = useState(() => !!localStorage.getItem('gfit_token'));
++  const [gfitToken, setGfitToken] = useState(null);
++  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+   const [googleLoading, setGoogleLoading] = useState(false);
+   const [syncStatus, setSyncStatus] = useState(null); // 'success' | 'error' | null
+ 
+@@ -82,8 +83,8 @@ function Dashboard() {
+       setTimeout(() => setSyncStatus(null), 3000);
+     } catch (err) {
+       console.error("Google Fit sync failed:", err);
+-      // Token probably expired ÔÇö clear it so user re-auths
+-      localStorage.removeItem('gfit_token');
++      // Token expired ÔÇö clear it so user re-auths
++      setGfitToken(null);
+       setIsGoogleConnected(false);
+       setSyncStatus('error');
+     } finally {
+@@ -93,7 +94,7 @@ function Dashboard() {
+ 
+   const loginGoogleFit = useGoogleLogin({
+     onSuccess: async (tokenResponse) => {
+-      localStorage.setItem('gfit_token', tokenResponse.access_token);
++      setGfitToken(tokenResponse.access_token);
+       setIsGoogleConnected(true);
+       await syncGoogleFit(tokenResponse.access_token);
+     },
+@@ -103,9 +104,8 @@ function Dashboard() {
+ 
+   // "Sync Now" handler ÔÇö uses stored token, falls back to re-login
+   const handleSyncNow = async () => {
+-    const storedToken = localStorage.getItem('gfit_token');
+-    if (storedToken) {
+-      await syncGoogleFit(storedToken);
++    if (gfitToken) {
++      await syncGoogleFit(gfitToken);
+     } else {
+       loginGoogleFit();
+     }
+
+commit ae0d1385402970433d2e55cc152b13548696742a
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:51:42 2026 +0100
+
+    fix: switch to HashRouter to prevent 404 on page refresh
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 3b90274..b191d07 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,5 +1,5 @@
+ import React, { useState, useEffect } from 'react';
+-import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
++import { HashRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+ import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
+ import { usePreferences } from './hooks/usePreferences';
+ import NewWorkout from './pages/NewWorkout';
+@@ -678,9 +678,9 @@ function App() {
+   }
+ 
+   return (
+-    <BrowserRouter>
++    <HashRouter>
+       <Layout session={session} />
+-    </BrowserRouter>
++    </HashRouter>
+   );
+ }
+ 
+
+commit 45580783514854c4e5309cf60170c7faafd518d3
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:35:27 2026 +0100
+
+    feat: persist google fit token, show Sync Now button after first login
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index b0c4e79..3b90274 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -48,8 +48,9 @@ function BottomNav() {
+ function Dashboard() {
+   const { db, saveDailyHealthMetric } = useData();
+   const { preferences: prefs, loading: prefsLoading } = usePreferences();
+-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
++  const [isGoogleConnected, setIsGoogleConnected] = useState(() => !!localStorage.getItem('gfit_token'));
+   const [googleLoading, setGoogleLoading] = useState(false);
++  const [syncStatus, setSyncStatus] = useState(null); // 'success' | 'error' | null
+ 
+   // Get today's local date string (YYYY-MM-DD)
+   const todayRaw = new Date();
+@@ -66,29 +67,49 @@ function Dashboard() {
+   const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
+   const weightDelta = (weight && prevWeight) ? (weight - prevWeight).toFixed(1) : null;
+ 
++  // Shared sync function ÔÇö works with any valid token
++  const syncGoogleFit = async (token) => {
++    setGoogleLoading(true);
++    setSyncStatus(null);
++    try {
++      const dailyResults = await fetchGoogleFitData(token, 7);
++      for (const day of dailyResults) {
++        if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
++        if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
++        if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
++      }
++      setSyncStatus('success');
++      setTimeout(() => setSyncStatus(null), 3000);
++    } catch (err) {
++      console.error("Google Fit sync failed:", err);
++      // Token probably expired ÔÇö clear it so user re-auths
++      localStorage.removeItem('gfit_token');
++      setIsGoogleConnected(false);
++      setSyncStatus('error');
++    } finally {
++      setGoogleLoading(false);
++    }
++  };
++
+   const loginGoogleFit = useGoogleLogin({
+     onSuccess: async (tokenResponse) => {
+-      try {
+-        setGoogleLoading(true);
+-        // fetchGoogleFitData now returns an array of { date, steps, sleepHours, weightKg }
+-        const dailyResults = await fetchGoogleFitData(tokenResponse.access_token, 7);
+-        
+-        for (const day of dailyResults) {
+-          if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
+-          if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
+-          if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
+-        }
+-        
+-        setIsGoogleConnected(true);
+-      } catch (err) {
+-        console.error("Failed to sync metrics from Google Fit:", err);
+-      } finally {
+-        setGoogleLoading(false);
+-      }
++      localStorage.setItem('gfit_token', tokenResponse.access_token);
++      setIsGoogleConnected(true);
++      await syncGoogleFit(tokenResponse.access_token);
+     },
+     scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
+     onError: error => console.error('Login Failed:', error)
+   });
++
++  // "Sync Now" handler ÔÇö uses stored token, falls back to re-login
++  const handleSyncNow = async () => {
++    const storedToken = localStorage.getItem('gfit_token');
++    if (storedToken) {
++      await syncGoogleFit(storedToken);
++    } else {
++      loginGoogleFit();
++    }
++  };
+   
+   const nextWorkout = db.workouts && db.workouts.length > 0 ? db.workouts[0] : null;
+   const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
+@@ -118,18 +139,20 @@ function Dashboard() {
+         <h2 className="h3 flex justify-between items-center mb-2">
+           Today's Readiness
+           <div className="flex flex-col items-end gap-1">
+-            {!isGoogleConnected ? (
+-              <button 
+-                className="badge text-xs px-2 py-1 cursor-pointer"
+-                style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
+-                onClick={() => loginGoogleFit()}
+-                disabled={googleLoading}
+-              >
+-                {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
+-              </button>
+-            ) : (
+-              <span className="badge badge-success text-[10px]">Fit Sync Active Ô£ô</span>
+-            )}
++            <button 
++              className="badge text-xs px-2 py-1 cursor-pointer"
++              style={{ 
++                background: isGoogleConnected ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)', 
++                color: isGoogleConnected ? 'var(--success)' : 'var(--text-primary)', 
++                border: `1px solid ${isGoogleConnected ? 'rgba(16, 185, 129, 0.3)' : 'var(--surface-border)'}` 
++              }}
++              onClick={handleSyncNow}
++              disabled={googleLoading}
++            >
++              {googleLoading ? 'Syncing...' : isGoogleConnected ? 'Ôå╗ Sync Now' : 'Connect Google Fit'}
++            </button>
++            {syncStatus === 'success' && <span className="text-[10px] text-success">Synced Ô£ô</span>}
++            {syncStatus === 'error' && <span className="text-[10px] text-warning">Token expired ÔÇö tap to reconnect</span>}
+           </div>
+         </h2>
+         {/* Google Fit Deprecation Warning */}
+
+commit b09bcbc7ad499c61a5e9376193abbbda762f9cfb
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:25:39 2026 +0100
+
+    fix: google fit syncs historical data to correct dates, not just today
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 3efa0c0..b0c4e79 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -70,10 +70,15 @@ function Dashboard() {
+     onSuccess: async (tokenResponse) => {
+       try {
+         setGoogleLoading(true);
+-        const { steps: fitSteps, sleepHours: fitSleep, weightKg: fitWeight } = await fetchGoogleFitData(tokenResponse.access_token);
+-        if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
+-        if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
+-        if (fitWeight > 0) await saveDailyHealthMetric(todayStr, 'weight', fitWeight);
++        // fetchGoogleFitData now returns an array of { date, steps, sleepHours, weightKg }
++        const dailyResults = await fetchGoogleFitData(tokenResponse.access_token, 7);
++        
++        for (const day of dailyResults) {
++          if (day.steps > 0) await saveDailyHealthMetric(day.date, 'steps', day.steps);
++          if (day.sleepHours > 0) await saveDailyHealthMetric(day.date, 'sleep_hours', day.sleepHours);
++          if (day.weightKg > 0) await saveDailyHealthMetric(day.date, 'weight', day.weightKg);
++        }
++        
+         setIsGoogleConnected(true);
+       } catch (err) {
+         console.error("Failed to sync metrics from Google Fit:", err);
+
+commit 394f648b83f6139edcbbf304b13daa9a57d5c530
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:16:33 2026 +0100
+
+    feat: profile revamp with goals summary, dashboard weight delta
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 92c7bc1..3efa0c0 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -61,6 +61,11 @@ function Dashboard() {
+   const steps = todayMetrics.steps || 0;
+   const weight = todayMetrics.weight || 0;
+ 
++  // Weight delta vs previous entry
++  const sortedMetrics = (db.healthMetrics || []).filter(m => m.weight > 0).sort((a, b) => new Date(b.date) - new Date(a.date));
++  const prevWeight = sortedMetrics.length > 1 ? sortedMetrics[1].weight : null;
++  const weightDelta = (weight && prevWeight) ? (weight - prevWeight).toFixed(1) : null;
++
+   const loginGoogleFit = useGoogleLogin({
+     onSuccess: async (tokenResponse) => {
+       try {
+@@ -156,16 +161,25 @@ function Dashboard() {
+           </div>
+           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter today's weight (kg):", weight || 0);
+-            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
++            const val = prompt("Enter today's weight (kg):", weight || '');
++            if(val && !isNaN(val) && parseFloat(val) > 0) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Weight Ô£Ä</span>
+             <div className="h2 mt-1 mb-1 text-white">
+-              {weight > 0 ? `${weight}kg` : '--'}
++              {weight > 0 ? `${weight}kg` : 'ÔÇö kg'}
+             </div>
+-            <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
+-              Log
+-            </span>
++            {weightDelta !== null ? (
++              <span className="badge text-[10px]" style={{
++                backgroundColor: Number(weightDelta) > 0 ? 'rgba(245, 158, 11, 0.1)' : 'rgba(16, 185, 129, 0.1)',
++                color: Number(weightDelta) > 0 ? 'var(--warning)' : 'var(--success)'
++              }}>
++                {Number(weightDelta) > 0 ? '+' : ''}{weightDelta}kg vs prev
++              </span>
++            ) : (
++              <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
++                Log
++              </span>
++            )}
+           </div>
+         </div>
+       </div>
+@@ -395,6 +409,123 @@ function WorkoutSelect() {
+   );
+ }
+ 
++function ProfilePage({ session, injectMockData }) {
++  const { preferences: prefs, loading: prefsLoading } = usePreferences();
++  const user = session?.user;
++  const email = user?.email || '';
++  const initials = email
++    .split('@')[0]
++    .split(/[._-]/)
++    .map(p => p.charAt(0).toUpperCase())
++    .slice(0, 2)
++    .join('');
++  const memberSince = user?.created_at
++    ? new Date(user.created_at).toLocaleDateString('en-US', { month: 'long', year: 'numeric' })
++    : 'ÔÇö';
++
++  const cardStyle = {
++    background: 'rgba(26, 26, 31, 0.85)',
++    boxShadow: 'var(--shadow-md)',
++    border: '1px solid var(--surface-border)',
++    borderRadius: 'var(--radius-xl)',
++    overflow: 'hidden'
++  };
++
++  return (
++    <div className="animate-fade-in p-4 pb-24">
++      {/* Avatar + Name */}
++      <div className="flex flex-col items-center text-center mt-4 mb-8">
++        <div style={{
++          width: '88px', height: '88px', borderRadius: '50%',
++          background: 'var(--gradient-main)',
++          display: 'flex', alignItems: 'center', justifyContent: 'center',
++          fontSize: '2rem', fontWeight: 700, color: '#fff',
++          marginBottom: '16px',
++          boxShadow: 'var(--shadow-glow)'
++        }}>
++          {initials || '?'}
++        </div>
++        <h1 className="h2 mb-1">My Profile</h1>
++        <span className="text-secondary text-sm">{email}</span>
++      </div>
++
++      {/* Account Info */}
++      <div style={cardStyle} className="mb-4">
++        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
++          <User size={14} /> Account
++        </div>
++        <div className="p-4 flex flex-col gap-3">
++          <div className="flex justify-between items-center text-sm">
++            <span className="text-muted">Email</span>
++            <span className="font-medium" style={{ maxWidth: '60%', overflow: 'hidden', textOverflow: 'ellipsis', whiteSpace: 'nowrap' }}>{email}</span>
++          </div>
++          <div className="flex justify-between items-center text-sm">
++            <span className="text-muted">Member Since</span>
++            <span className="font-medium">{memberSince}</span>
++          </div>
++          <div className="flex justify-between items-center text-sm">
++            <span className="text-muted">Status</span>
++            <span className="badge badge-success text-[10px]">Active</span>
++          </div>
++        </div>
++      </div>
++
++      {/* Preferences Summary */}
++      <div style={cardStyle} className="mb-4">
++        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
++          <HeartPulse size={14} /> My Goals
++        </div>
++        {prefsLoading ? (
++          <div className="p-4 animate-pulse">
++            <div className="h-4 bg-black/20 rounded w-2/3 mb-2"></div>
++            <div className="h-4 bg-black/20 rounded w-1/2"></div>
++          </div>
++        ) : (
++          <div className="p-4 flex gap-3">
++            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
++              <div className="text-xs text-muted mb-1">Sleep</div>
++              <div className="text-lg font-bold text-white">{prefs?.sleep_goal ?? 7.5}h</div>
++            </div>
++            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
++              <div className="text-xs text-muted mb-1">Steps</div>
++              <div className="text-lg font-bold text-white">{((prefs?.step_goal ?? 8000) / 1000).toFixed(1)}k</div>
++            </div>
++            <div className="flex-1 text-center p-3 rounded" style={{ background: 'rgba(0,0,0,0.2)' }}>
++              <div className="text-xs text-muted mb-1">Weight</div>
++              <div className="text-lg font-bold text-white">{prefs?.weight_goal ?? 'ÔÇö'}{prefs?.weight_goal ? (prefs?.weight_goal_unit || 'kg') : ''}</div>
++            </div>
++          </div>
++        )}
++        <div className="px-4 pb-4">
++          <Link to="/health" className="text-xs text-accent-primary hover:underline">Edit goals in Health tab ÔåÆ</Link>
++        </div>
++      </div>
++
++      {/* Data Management */}
++      <div style={cardStyle} className="mb-4">
++        <div className="p-3 px-4 flex items-center gap-2 text-xs uppercase tracking-wider text-secondary font-semibold" style={{ borderBottom: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.15)' }}>
++          <Database size={14} /> Data
++        </div>
++        <div className="p-4">
++          <p className="text-xs text-muted mb-3">Inject 14 days of mock workouts, sleep, and steps for testing.</p>
++          <button className="btn w-full btn-secondary text-sm" onClick={injectMockData}>
++            Inject Test Analytics
++          </button>
++        </div>
++      </div>
++
++      {/* Sign Out */}
++      <button
++        className="btn w-full flex justify-center items-center gap-2 mt-2"
++        style={{ background: 'rgba(239, 68, 68, 0.08)', border: '1px solid rgba(239, 68, 68, 0.25)', color: 'var(--danger)', padding: '14px', borderRadius: 'var(--radius-xl)' }}
++        onClick={() => supabase.auth.signOut()}
++      >
++        <LogOut size={18} /> Sign Out
++      </button>
++    </div>
++  );
++}
++
+ function Layout({ session }) {
+   const { loading, error } = useData();
+ 
+@@ -483,62 +614,7 @@ function Layout({ session }) {
+           <Route path="/workouts/new" element={<NewWorkout />} />
+           <Route path="/progress" element={<Progress />} />
+           <Route path="/health" element={<Health />} />
+-          <Route path="/profile" element={
+-            <div className="animate-fade-in p-4 pb-20">
+-              <div className="flex flex-col items-center justify-center text-center mt-6 mb-8">
+-                <div style={{ padding: '4px', background: 'var(--gradient-main)', borderRadius: '50%', marginBottom: '16px' }}>
+-                  <img src={`https://ui-avatars.com/api/?name=${session?.user?.email}&background=1a1a1f&color=fff&size=128`} alt="User Avatar" style={{ borderRadius: '50%', width: '96px', height: '96px', border: '4px solid var(--bg-color)' }} />
+-                </div>
+-                <h1 className="h2 mb-1">Athlete Profile</h1>
+-                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)', fontSize: '0.85rem', padding: '4px 12px' }}>
+-                  {session?.user?.email}
+-                </span>
+-              </div>
+-              
+-              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
+-                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
+-                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
+-                    <User size={16} /> Account Info
+-                  </h3>
+-                </div>
+-                <div className="p-4 flex flex-col gap-4">
+-                  <div className="flex justify-between items-center">
+-                    <span className="text-muted text-sm">Member Since</span>
+-                    <span className="font-medium text-sm">{new Date(session?.user?.created_at).toLocaleDateString()}</span>
+-                  </div>
+-                  <div className="flex justify-between items-center">
+-                    <span className="text-muted text-sm">Status</span>
+-                    <span className="badge badge-success text-[10px]">Active Pro</span>
+-                  </div>
+-                </div>
+-              </div>
+-
+-              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
+-                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
+-                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
+-                    <Database size={16} /> Data Management
+-                  </h3>
+-                </div>
+-                <div className="p-4">
+-                  <p className="text-xs text-muted mb-4 line-clamp-2">Need testing data? Inject 14 days of realistic mock workouts, sleep, and steps into your analytics dashboard.</p>
+-                  <button 
+-                    className="btn w-full btn-secondary text-sm" 
+-                    onClick={injectMockData}
+-                  >
+-                    Inject Test Analytics
+-                  </button>
+-                </div>
+-              </div>
+-              
+-              <button 
+-                className="btn w-full flex justify-center items-center gap-2" 
+-                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', padding: '12px' }} 
+-                onClick={() => supabase.auth.signOut()}
+-              >
+-                <LogOut size={18} /> Sign Out
+-              </button>
+-            </div>
+-          } />
++          <Route path="/profile" element={<ProfilePage session={session} injectMockData={injectMockData} />} />
+         </Routes>
+       </main>
+       <BottomNav />
+
+commit 271c612e7d6c59cf720e71f558f2b8f0bb2f53bd
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:03:58 2026 +0100
+
+    refactor: extract usePreferences hook, fix upsert and fit logic
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 7b0d34c..92c7bc1 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,6 +1,7 @@
+ import React, { useState, useEffect } from 'react';
+ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+ import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
++import { usePreferences } from './hooks/usePreferences';
+ import NewWorkout from './pages/NewWorkout';
+ import Progress from './pages/Progress';
+ import Health from './pages/Health';
+@@ -46,6 +47,7 @@ function BottomNav() {
+ 
+ function Dashboard() {
+   const { db, saveDailyHealthMetric } = useData();
++  const { preferences: prefs, loading: prefsLoading } = usePreferences();
+   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+   const [googleLoading, setGoogleLoading] = useState(false);
+ 
+@@ -88,6 +90,8 @@ function Dashboard() {
+     return `${h}h ${m}m`;
+   };
+ 
++  if (prefsLoading) return <div className="p-4 text-center text-muted">Loading dashboard...</div>;
++
+   return (
+     <div className="animate-fade-in">
+       <div className="flex justify-between items-center mb-6">
+@@ -143,11 +147,11 @@ function Dashboard() {
+             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
+-            <div className="h2 mt-1 mb-1" style={{ color: steps >= (db.preferences?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
++            <div className="h2 mt-1 mb-1" style={{ color: steps >= (prefs?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
+               {steps.toLocaleString()}
+             </div>
+-            <span className={`badge ${steps >= (db.preferences?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (db.preferences?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+-              {steps >= (db.preferences?.step_goal || 8000) ? 'Active' : 'Recovery'}
++            <span className={`badge ${steps >= (prefs?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (prefs?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
++              {steps >= (prefs?.step_goal || 8000) ? 'Active' : 'Recovery'}
+             </span>
+           </div>
+           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+
+commit ca20ce5118306d6c2432ceca3366f2ea9162176c
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 18:00:08 2026 +0100
+
+    feat: profile revamp, goals, weight tracking
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index ac7cb51..7b0d34c 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,6 +1,6 @@
+ import React, { useState, useEffect } from 'react';
+ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+-import { Home, LineChart, Activity, User, Plus, HeartPulse } from 'lucide-react';
++import { Home, LineChart, Activity, User, Plus, HeartPulse, Scale, AlertTriangle, LogOut, Database } from 'lucide-react';
+ import NewWorkout from './pages/NewWorkout';
+ import Progress from './pages/Progress';
+ import Health from './pages/Health';
+@@ -57,14 +57,16 @@ function Dashboard() {
+   
+   const sleep = todayMetrics.sleep_hours || 0;
+   const steps = todayMetrics.steps || 0;
++  const weight = todayMetrics.weight || 0;
+ 
+   const loginGoogleFit = useGoogleLogin({
+     onSuccess: async (tokenResponse) => {
+       try {
+         setGoogleLoading(true);
+-        const { steps: fitSteps, sleepHours: fitSleep } = await fetchGoogleFitData(tokenResponse.access_token);
++        const { steps: fitSteps, sleepHours: fitSleep, weightKg: fitWeight } = await fetchGoogleFitData(tokenResponse.access_token);
+         if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
+         if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
++        if (fitWeight > 0) await saveDailyHealthMetric(todayStr, 'weight', fitWeight);
+         setIsGoogleConnected(true);
+       } catch (err) {
+         console.error("Failed to sync metrics from Google Fit:", err);
+@@ -72,7 +74,7 @@ function Dashboard() {
+         setGoogleLoading(false);
+       }
+     },
+-    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read',
++    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read',
+     onError: error => console.error('Login Failed:', error)
+   });
+   
+@@ -99,21 +101,29 @@ function Dashboard() {
+       </div>
+ 
+       <div className="card mb-6 glass">
+-        <h2 className="h3 flex justify-between items-center">
++        <h2 className="h3 flex justify-between items-center mb-2">
+           Today's Readiness
+-          {!isGoogleConnected ? (
+-            <button 
+-              className="badge text-xs px-2 py-1 cursor-pointer"
+-              style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
+-              onClick={() => loginGoogleFit()}
+-              disabled={googleLoading}
+-            >
+-              {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
+-            </button>
+-          ) : (
+-            <span className="badge badge-success text-xs">Live Fit Sync Ô£ô</span>
+-          )}
++          <div className="flex flex-col items-end gap-1">
++            {!isGoogleConnected ? (
++              <button 
++                className="badge text-xs px-2 py-1 cursor-pointer"
++                style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
++                onClick={() => loginGoogleFit()}
++                disabled={googleLoading}
++              >
++                {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
++              </button>
++            ) : (
++              <span className="badge badge-success text-[10px]">Fit Sync Active Ô£ô</span>
++            )}
++          </div>
+         </h2>
++        {/* Google Fit Deprecation Warning */}
++        <div className="flex items-center gap-2 mb-4 p-2 rounded text-xs text-warning" style={{ background: 'rgba(245, 158, 11, 0.1)', border: '1px solid rgba(245, 158, 11, 0.2)' }}>
++          <AlertTriangle size={14} className="flex-shrink-0" />
++          <span>Google Fit sync will stop working in 2026. Manual entry is recommended.</span>
++        </div>
++
+         <div className="flex justify-between mt-4">
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+             const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 0);
+@@ -133,11 +143,24 @@ function Dashboard() {
+             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
+-            <div className="h2 mt-1 mb-1" style={{ color: steps >= 8000 ? 'var(--success)' : 'var(--warning)' }}>
++            <div className="h2 mt-1 mb-1" style={{ color: steps >= (db.preferences?.step_goal || 8000) ? 'var(--success)' : 'var(--warning)' }}>
+               {steps.toLocaleString()}
+             </div>
+-            <span className={`badge ${steps >= 8000 ? 'badge-success' : ''}`} style={steps < 8000 ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
+-              {steps >= 8000 ? 'Active' : 'Recovery'}
++            <span className={`badge ${steps >= (db.preferences?.step_goal || 8000) ? 'badge-success' : ''}`} style={steps < (db.preferences?.step_goal || 8000) ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
++              {steps >= (db.preferences?.step_goal || 8000) ? 'Active' : 'Recovery'}
++            </span>
++          </div>
++          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
++          <div className="flex-col items-center flex-1 text-center" onClick={() => {
++            const val = prompt("Enter today's weight (kg):", weight || 0);
++            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'weight', parseFloat(val));
++          }}>
++            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Weight Ô£Ä</span>
++            <div className="h2 mt-1 mb-1 text-white">
++              {weight > 0 ? `${weight}kg` : '--'}
++            </div>
++            <span className="badge" style={{ backgroundColor: 'var(--surface-color)', color: 'var(--text-secondary)' }}>
++              Log
+             </span>
+           </div>
+         </div>
+@@ -457,29 +480,58 @@ function Layout({ session }) {
+           <Route path="/progress" element={<Progress />} />
+           <Route path="/health" element={<Health />} />
+           <Route path="/profile" element={
+-            <div className="animate-fade-in p-4">
+-              <h1 className="h1 mb-1">Profile</h1>
+-              <p className="text-secondary mb-6">Manage your account and connections.</p>
+-              
+-              <div className="card glass mb-6 p-4">
+-                <span className="text-xs text-muted block mb-1">Logged in as</span>
+-                <span className="font-medium">{session?.user?.email || "Unknown User"}</span>
++            <div className="animate-fade-in p-4 pb-20">
++              <div className="flex flex-col items-center justify-center text-center mt-6 mb-8">
++                <div style={{ padding: '4px', background: 'var(--gradient-main)', borderRadius: '50%', marginBottom: '16px' }}>
++                  <img src={`https://ui-avatars.com/api/?name=${session?.user?.email}&background=1a1a1f&color=fff&size=128`} alt="User Avatar" style={{ borderRadius: '50%', width: '96px', height: '96px', border: '4px solid var(--bg-color)' }} />
++                </div>
++                <h1 className="h2 mb-1">Athlete Profile</h1>
++                <span className="badge" style={{ background: 'rgba(59, 130, 246, 0.1)', color: 'var(--accent-primary)', fontSize: '0.85rem', padding: '4px 12px' }}>
++                  {session?.user?.email}
++                </span>
+               </div>
+               
+-              <button 
+-                className="btn w-full mb-4" 
+-                style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} 
+-                onClick={injectMockData}
+-              >
+-                Inject Test Analytics (14 Days)
+-              </button>
++              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
++                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
++                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
++                    <User size={16} /> Account Info
++                  </h3>
++                </div>
++                <div className="p-4 flex flex-col gap-4">
++                  <div className="flex justify-between items-center">
++                    <span className="text-muted text-sm">Member Since</span>
++                    <span className="font-medium text-sm">{new Date(session?.user?.created_at).toLocaleDateString()}</span>
++                  </div>
++                  <div className="flex justify-between items-center">
++                    <span className="text-muted text-sm">Status</span>
++                    <span className="badge badge-success text-[10px]">Active Pro</span>
++                  </div>
++                </div>
++              </div>
+ 
++              <div className="card glass mb-6 p-0" style={{ overflow: 'hidden' }}>
++                <div className="p-4" style={{ background: 'rgba(0,0,0,0.2)', borderBottom: '1px solid var(--surface-border)' }}>
++                  <h3 className="h3 mb-0 text-sm uppercase tracking-wider text-secondary flex items-center gap-2">
++                    <Database size={16} /> Data Management
++                  </h3>
++                </div>
++                <div className="p-4">
++                  <p className="text-xs text-muted mb-4 line-clamp-2">Need testing data? Inject 14 days of realistic mock workouts, sleep, and steps into your analytics dashboard.</p>
++                  <button 
++                    className="btn w-full btn-secondary text-sm" 
++                    onClick={injectMockData}
++                  >
++                    Inject Test Analytics
++                  </button>
++                </div>
++              </div>
++              
+               <button 
+-                className="btn w-full text-warning" 
+-                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--warning)' }} 
++                className="btn w-full flex justify-center items-center gap-2" 
++                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid rgba(239, 68, 68, 0.3)', color: 'var(--danger)', padding: '12px' }} 
+                 onClick={() => supabase.auth.signOut()}
+               >
+-                Sign Out
++                <LogOut size={18} /> Sign Out
+               </button>
+             </div>
+           } />
+
+commit 8f09f05ff5d8a8a10855bb671742ffae10a54689
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 17:40:26 2026 +0100
+
+    feat: add email to profile, health insights, and delete log options
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index b59344e..ac7cb51 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -9,6 +9,7 @@ import { useGoogleLogin } from '@react-oauth/google';
+ import { fetchGoogleFitData } from './lib/googleFit';
+ import { supabase } from './lib/supabase';
+ import Login from './pages/Login';
++import { Trash2 } from 'lucide-react'; // Added Trash2
+ 
+ // ... BottomNav code ...
+ 
+@@ -166,8 +167,9 @@ function Dashboard() {
+ }
+ 
+ function WorkoutLog() {
+-  const { db } = useData();
++  const { db, deleteWorkoutSession } = useData();
+   const [expandedSessionId, setExpandedSessionId] = useState(null);
++  const [deletingId, setDeletingId] = useState(null);
+ 
+   // Sort and display the latest sessions we fetched from Context
+   // We need to map the session template_id back to actual workout names
+@@ -222,7 +224,25 @@ function WorkoutLog() {
+                   </div>
+                   <div className="flex items-center gap-2">
+                     {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
+-                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)' }}>Ôû╝</span>
++                    <button 
++                      className="p-1 text-muted hover:text-warning transition-colors"
++                      onClick={async (e) => {
++                        e.stopPropagation();
++                        if(window.confirm("Are you sure you want to delete this workout?")) {
++                          try {
++                            setDeletingId(session.id);
++                            await deleteWorkoutSession(session.id);
++                          } catch (err) {
++                            alert("Failed to delete: " + err.message);
++                            setDeletingId(null);
++                          }
++                        }
++                      }}
++                      disabled={deletingId === session.id}
++                    >
++                      <Trash2 size={16} />
++                    </button>
++                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)', marginLeft: '4px' }}>Ôû╝</span>
+                   </div>
+                 </div>
+                 
+@@ -348,7 +368,7 @@ function WorkoutSelect() {
+   );
+ }
+ 
+-function Layout() {
++function Layout({ session }) {
+   const { loading, error } = useData();
+ 
+   if (loading) {
+@@ -441,6 +461,11 @@ function Layout() {
+               <h1 className="h1 mb-1">Profile</h1>
+               <p className="text-secondary mb-6">Manage your account and connections.</p>
+               
++              <div className="card glass mb-6 p-4">
++                <span className="text-xs text-muted block mb-1">Logged in as</span>
++                <span className="font-medium">{session?.user?.email || "Unknown User"}</span>
++              </div>
++              
+               <button 
+                 className="btn w-full mb-4" 
+                 style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} 
+@@ -494,7 +519,7 @@ function App() {
+ 
+   return (
+     <BrowserRouter>
+-      <Layout />
++      <Layout session={session} />
+     </BrowserRouter>
+   );
+ }
+
+commit 2485400fbd67c5c352af5953fd0b945bfeafe46c
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 17:10:10 2026 +0100
+
+    feat: add dedicated inject mock data button to profile tab to bypass RLS policy blocks
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 41f608e..b59344e 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -79,6 +79,7 @@ function Dashboard() {
+   const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
+ 
+   const formatSleep = (hoursDec) => {
++    if (!hoursDec) return "0h 0m";
+     const h = Math.floor(hoursDec);
+     const m = Math.round((hoursDec - h) * 60);
+     return `${h}h ${m}m`;
+@@ -114,7 +115,7 @@ function Dashboard() {
+         </h2>
+         <div className="flex justify-between mt-4">
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 7.5);
++            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 0);
+             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'sleep_hours', parseFloat(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Sleep Ô£Ä</span>
+@@ -127,7 +128,7 @@ function Dashboard() {
+           </div>
+           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter today's steps:", steps || 5000);
++            const val = prompt("Enter today's steps:", steps || 0);
+             if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
+@@ -373,6 +374,58 @@ function Layout() {
+     );
+   }
+ 
++  const injectMockData = async () => {
++    try {
++      if(!window.confirm("Inject 14 days of mock workouts and health data into your account?")) return;
++      
++      const userId = (await supabase.auth.getSession()).data.session?.user?.id;
++      if (!userId) throw new Error("No active session");
++
++      const { data: templates } = await supabase.from('workout_templates').select('*').limit(5);
++      const { data: exercises } = await supabase.from('exercises').select('*').limit(20);
++
++      const healthData = [];
++      for (let i = 14; i >= 0; i--) {
++        const d = new Date();
++        d.setDate(d.getDate() - i);
++        healthData.push({
++          user_id: userId,
++          date: d.toISOString().split('T')[0],
++          sleep_hours: (Math.random() * (9 - 5) + 5).toFixed(1),
++          steps: Math.floor(Math.random() * (12000 - 3000) + 3000)
++        });
++      }
++      await supabase.from('health_metrics').upsert(healthData, { onConflict: 'user_id, date' });
++
++      for (let i = 10; i >= 1; i--) {
++        const template = templates[i % templates.length];
++        const d = new Date(); d.setDate(d.getDate() - (i + Math.floor(i * 0.4))); 
++
++        const { data: sessionData } = await supabase.from('workout_sessions').insert({
++          user_id: userId, template_id: template.id, notes: "Mock data session", created_at: d.toISOString()
++        }).select().single();
++
++        const sets = [];
++        for (let exIdx = 0; exIdx < 3; exIdx++) {
++          const exercise = exercises[exIdx];
++          const baseWeight = 20 + (10 - i) * 2.5; 
++          for (let s = 1; s <= 3; s++) {
++            sets.push({
++              user_id: userId, session_id: sessionData.id, exercise_id: exercise.id,
++              set_number: s, reps: Math.floor(Math.random() * (12 - 8) + 8), weight: baseWeight,
++              completed: true, created_at: d.toISOString()
++            });
++          }
++        }
++        await supabase.from('logged_sets').insert(sets);
++      }
++      alert("Ô£à Mock Data Setup Complete! Refresh the app to view Analytics.");
++      window.location.reload();
++    } catch (err) {
++      alert("Injection Failed: " + err.message);
++    }
++  };
++
+   return (
+     <div className="app-container">
+       <main className="main-content">
+@@ -383,7 +436,28 @@ function Layout() {
+           <Route path="/workouts/new" element={<NewWorkout />} />
+           <Route path="/progress" element={<Progress />} />
+           <Route path="/health" element={<Health />} />
+-          <Route path="/profile" element={<div className="animate-fade-in p-4"><h1 className="h1 mb-1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
++          <Route path="/profile" element={
++            <div className="animate-fade-in p-4">
++              <h1 className="h1 mb-1">Profile</h1>
++              <p className="text-secondary mb-6">Manage your account and connections.</p>
++              
++              <button 
++                className="btn w-full mb-4" 
++                style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} 
++                onClick={injectMockData}
++              >
++                Inject Test Analytics (14 Days)
++              </button>
++
++              <button 
++                className="btn w-full text-warning" 
++                style={{ background: 'rgba(239, 68, 68, 0.1)', border: '1px solid var(--warning)' }} 
++                onClick={() => supabase.auth.signOut()}
++              >
++                Sign Out
++              </button>
++            </div>
++          } />
+         </Routes>
+       </main>
+       <BottomNav />
+
+commit 392c399bbbfd5931454e9c440141f2a8dcba7f79
+Author: Grzegorz Zawadzki <grzegorzzawadzki.33@gmail.com>
+Date:   Sat Mar 7 17:02:41 2026 +0100
+
+    feat: add daily sleep and steps health tracking tabs
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+index 647756d..41f608e 100644
+--- a/client/src/App.jsx
++++ b/client/src/App.jsx
+@@ -1,8 +1,9 @@
+ import React, { useState, useEffect } from 'react';
+ import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
+-import { Home, LineChart, Activity, User, Plus } from 'lucide-react';
++import { Home, LineChart, Activity, User, Plus, HeartPulse } from 'lucide-react';
+ import NewWorkout from './pages/NewWorkout';
+ import Progress from './pages/Progress';
++import Health from './pages/Health';
+ import { useData } from './context/DataContext';
+ import { useGoogleLogin } from '@react-oauth/google';
+ import { fetchGoogleFitData } from './lib/googleFit';
+@@ -34,28 +35,35 @@ function BottomNav() {
+         <LineChart size={24} />
+         <span>Progress</span>
+       </Link>
+-      <Link to="/profile" className={`nav-item ${path === '/profile' ? 'active' : ''}`}>
+-        <User size={24} />
+-        <span>Profile</span>
++      <Link to="/health" className={`nav-item ${path === '/health' ? 'active' : ''}`}>
++        <HeartPulse size={24} />
++        <span>Health</span>
+       </Link>
+     </nav>
+   );
+ }
+ 
+ function Dashboard() {
+-  const { db } = useData();
+-  const [sleep, setSleep] = useState(7.25); // 7h 15m
+-  const [steps, setSteps] = useState(6240);
++  const { db, saveDailyHealthMetric } = useData();
+   const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+   const [googleLoading, setGoogleLoading] = useState(false);
+ 
++  // Get today's local date string (YYYY-MM-DD)
++  const todayRaw = new Date();
++  const offset = todayRaw.getTimezoneOffset() * 60000;
++  const todayStr = (new Date(todayRaw - offset)).toISOString().split('T')[0];
++  const todayMetrics = db.healthMetrics?.find(m => m.date === todayStr) || {};
++  
++  const sleep = todayMetrics.sleep_hours || 0;
++  const steps = todayMetrics.steps || 0;
++
+   const loginGoogleFit = useGoogleLogin({
+     onSuccess: async (tokenResponse) => {
+       try {
+         setGoogleLoading(true);
+         const { steps: fitSteps, sleepHours: fitSleep } = await fetchGoogleFitData(tokenResponse.access_token);
+-        if (fitSteps > 0) setSteps(fitSteps);
+-        if (fitSleep > 0) setSleep(fitSleep);
++        if (fitSteps > 0) await saveDailyHealthMetric(todayStr, 'steps', fitSteps);
++        if (fitSleep > 0) await saveDailyHealthMetric(todayStr, 'sleep_hours', fitSleep);
+         setIsGoogleConnected(true);
+       } catch (err) {
+         console.error("Failed to sync metrics from Google Fit:", err);
+@@ -67,8 +75,8 @@ function Dashboard() {
+     onError: error => console.error('Login Failed:', error)
+   });
+   
+-  const nextWorkout = db.workouts[0];
+-  const nextPhase = db.phases.find(p => p.id === nextWorkout.phaseId);
++  const nextWorkout = db.workouts && db.workouts.length > 0 ? db.workouts[0] : null;
++  const nextPhase = nextWorkout ? db.phases.find(p => p.id === nextWorkout.phaseId) : null;
+ 
+   const formatSleep = (hoursDec) => {
+     const h = Math.floor(hoursDec);
+@@ -83,7 +91,9 @@ function Dashboard() {
+           <h1 className="h1 mb-1">Overview</h1>
+           <p className="text-secondary">Welcome back, Athlete!</p>
+         </div>
+-        <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
++        <Link to="/profile">
++          <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
++        </Link>
+       </div>
+ 
+       <div className="card mb-6 glass">
+@@ -104,8 +114,8 @@ function Dashboard() {
+         </h2>
+         <div className="flex justify-between mt-4">
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep);
+-            if(val && !isNaN(val)) setSleep(parseFloat(val));
++            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep || 7.5);
++            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'sleep_hours', parseFloat(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Sleep Ô£Ä</span>
+             <div className="h2 mt-1 mb-1" style={{ color: sleep >= 7 ? 'var(--success)' : 'var(--warning)' }}>
+@@ -117,8 +127,8 @@ function Dashboard() {
+           </div>
+           <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
+           <div className="flex-col items-center flex-1 text-center" onClick={() => {
+-            const val = prompt("Enter today's steps:", steps);
+-            if(val && !isNaN(val)) setSteps(parseInt(val));
++            const val = prompt("Enter today's steps:", steps || 5000);
++            if(val && !isNaN(val)) saveDailyHealthMetric(todayStr, 'steps', parseInt(val));
+           }}>
+             <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
+             <div className="h2 mt-1 mb-1" style={{ color: steps >= 8000 ? 'var(--success)' : 'var(--warning)' }}>
+@@ -132,18 +142,24 @@ function Dashboard() {
+       </div>
+ 
+       <h2 className="h2 mb-4">Next Workout</h2>
+-      <div className="card">
+-        <div className="flex justify-between items-start mb-4">
+-          <div>
+-            <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase.name}</span>
+-            <h3 className="h3">{nextWorkout.name}</h3>
+-            <p className="text-secondary text-sm">{nextWorkout.exercises.length} Exercises</p>
++      {nextWorkout ? (
++        <div className="card">
++          <div className="flex justify-between items-start mb-4">
++            <div>
++              <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase?.name}</span>
++              <h3 className="h3">{nextWorkout.name}</h3>
++              <p className="text-secondary text-sm">{nextWorkout.exercises?.length} Exercises</p>
++            </div>
+           </div>
++          <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
++            Start Workout
++          </Link>
+         </div>
+-        <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
+-          Start Workout
+-        </Link>
+-      </div>
++      ) : (
++        <div className="card text-center text-muted p-6">
++          No workouts available. Please import your training plan.
++        </div>
++      )}
+     </div>
+   );
+ }
+@@ -177,7 +193,7 @@ function WorkoutLog() {
+           <div className="text-center text-muted text-sm mt-8">No workouts logged yet.</div>
+         ) : (
+           sessions.map(session => {
+-            const template = db.workouts.find(w => w.id === session.template_id);
++            const template = db.workouts && db.workouts.find(w => w.id === session.template_id);
+             const templateName = template ? template.name : "Unknown Workout";
+             const isExpanded = expandedSessionId === session.id;
+             
+@@ -272,7 +288,16 @@ function WorkoutLog() {
+ 
+ function WorkoutSelect() {
+   const { db } = useData();
+-  const [selectedPhaseId, setSelectedPhaseId] = useState(db.phases[0].id);
++  const hasPhases = db.phases && db.phases.length > 0;
++  const [selectedPhaseId, setSelectedPhaseId] = useState(hasPhases ? db.phases[0].id : null);
++
++  if (!hasPhases) {
++    return (
++      <div className="animate-fade-in text-center p-6 text-muted">
++        No workouts found in the database.
++      </div>
++    );
++  }
+ 
+   return (
+     <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
+@@ -357,7 +382,8 @@ function Layout() {
+           <Route path="/workouts/select" element={<WorkoutSelect />} />
+           <Route path="/workouts/new" element={<NewWorkout />} />
+           <Route path="/progress" element={<Progress />} />
+-          <Route path="/profile" element={<div className="p-4"><h1 className="h1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
++          <Route path="/health" element={<Health />} />
++          <Route path="/profile" element={<div className="animate-fade-in p-4"><h1 className="h1 mb-1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
+         </Routes>
+       </main>
+       <BottomNav />
+
+commit 37b84a9379c8a23d53f545f5eb0c0a10164b9096
+Author: Grzegorz Zawadzki <gzawadzki@gmail.com>
+Date:   Sat Mar 7 15:58:42 2026 +0100
+
+    feat: initial commit for cloud-first workout logger
+
+diff --git a/client/src/App.jsx b/client/src/App.jsx
+new file mode 100644
+index 0000000..647756d
+--- /dev/null
++++ b/client/src/App.jsx
+@@ -0,0 +1,402 @@
++import React, { useState, useEffect } from 'react';
++import { BrowserRouter, Routes, Route, Link, useLocation } from 'react-router-dom';
++import { Home, LineChart, Activity, User, Plus } from 'lucide-react';
++import NewWorkout from './pages/NewWorkout';
++import Progress from './pages/Progress';
++import { useData } from './context/DataContext';
++import { useGoogleLogin } from '@react-oauth/google';
++import { fetchGoogleFitData } from './lib/googleFit';
++import { supabase } from './lib/supabase';
++import Login from './pages/Login';
++
++// ... BottomNav code ...
++
++function BottomNav() {
++  const location = useLocation();
++  const path = location.pathname;
++
++  return (
++    <nav className="bottom-nav">
++      <Link to="/" className={`nav-item ${path === '/' ? 'active' : ''}`}>
++        <Home size={24} />
++        <span>Home</span>
++      </Link>
++      <Link to="/workouts" className={`nav-item ${path === '/workouts' && !path.includes('/new') && !path.includes('/select') ? 'active' : ''}`}>
++        <Activity size={24} />
++        <span>Log</span>
++      </Link>
++      <div style={{ position: 'relative', top: '-15px' }}>
++        <Link to="/workouts/select" className="btn btn-primary btn-icon" style={{ padding: '12px', boxShadow: 'var(--shadow-lg)' }}>
++          <Plus size={28} color="white" />
++        </Link>
++      </div>
++      <Link to="/progress" className={`nav-item ${path === '/progress' ? 'active' : ''}`}>
++        <LineChart size={24} />
++        <span>Progress</span>
++      </Link>
++      <Link to="/profile" className={`nav-item ${path === '/profile' ? 'active' : ''}`}>
++        <User size={24} />
++        <span>Profile</span>
++      </Link>
++    </nav>
++  );
++}
++
++function Dashboard() {
++  const { db } = useData();
++  const [sleep, setSleep] = useState(7.25); // 7h 15m
++  const [steps, setSteps] = useState(6240);
++  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
++  const [googleLoading, setGoogleLoading] = useState(false);
++
++  const loginGoogleFit = useGoogleLogin({
++    onSuccess: async (tokenResponse) => {
++      try {
++        setGoogleLoading(true);
++        const { steps: fitSteps, sleepHours: fitSleep } = await fetchGoogleFitData(tokenResponse.access_token);
++        if (fitSteps > 0) setSteps(fitSteps);
++        if (fitSleep > 0) setSleep(fitSleep);
++        setIsGoogleConnected(true);
++      } catch (err) {
++        console.error("Failed to sync metrics from Google Fit:", err);
++      } finally {
++        setGoogleLoading(false);
++      }
++    },
++    scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read',
++    onError: error => console.error('Login Failed:', error)
++  });
++  
++  const nextWorkout = db.workouts[0];
++  const nextPhase = db.phases.find(p => p.id === nextWorkout.phaseId);
++
++  const formatSleep = (hoursDec) => {
++    const h = Math.floor(hoursDec);
++    const m = Math.round((hoursDec - h) * 60);
++    return `${h}h ${m}m`;
++  };
++
++  return (
++    <div className="animate-fade-in">
++      <div className="flex justify-between items-center mb-6">
++        <div>
++          <h1 className="h1 mb-1">Overview</h1>
++          <p className="text-secondary">Welcome back, Athlete!</p>
++        </div>
++        <img src="https://ui-avatars.com/api/?name=User&background=3b82f6&color=fff" alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
++      </div>
++
++      <div className="card mb-6 glass">
++        <h2 className="h3 flex justify-between items-center">
++          Today's Readiness
++          {!isGoogleConnected ? (
++            <button 
++              className="badge text-xs px-2 py-1 cursor-pointer"
++              style={{ background: 'var(--surface-color)', color: 'var(--text-primary)', border: '1px solid var(--surface-border)' }}
++              onClick={() => loginGoogleFit()}
++              disabled={googleLoading}
++            >
++              {googleLoading ? 'Syncing...' : 'Connect Google Fit'}
++            </button>
++          ) : (
++            <span className="badge badge-success text-xs">Live Fit Sync Ô£ô</span>
++          )}
++        </h2>
++        <div className="flex justify-between mt-4">
++          <div className="flex-col items-center flex-1 text-center" onClick={() => {
++            const val = prompt("Enter sleep in hours (e.g. 7.5):", sleep);
++            if(val && !isNaN(val)) setSleep(parseFloat(val));
++          }}>
++            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Sleep Ô£Ä</span>
++            <div className="h2 mt-1 mb-1" style={{ color: sleep >= 7 ? 'var(--success)' : 'var(--warning)' }}>
++              {formatSleep(sleep)}
++            </div>
++            <span className={`badge ${sleep >= 7 ? 'badge-success' : ''}`} style={sleep < 7 ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
++              {sleep >= 7 ? 'Optimal' : 'Low'}
++            </span>
++          </div>
++          <div style={{ width: '1px', backgroundColor: 'var(--surface-border)' }}></div>
++          <div className="flex-col items-center flex-1 text-center" onClick={() => {
++            const val = prompt("Enter today's steps:", steps);
++            if(val && !isNaN(val)) setSteps(parseInt(val));
++          }}>
++            <span className="text-muted text-sm" style={{ cursor: 'pointer' }}>Steps Ô£Ä</span>
++            <div className="h2 mt-1 mb-1" style={{ color: steps >= 8000 ? 'var(--success)' : 'var(--warning)' }}>
++              {steps.toLocaleString()}
++            </div>
++            <span className={`badge ${steps >= 8000 ? 'badge-success' : ''}`} style={steps < 8000 ? {backgroundColor: 'rgba(245, 158, 11, 0.1)', color: 'var(--warning)'} : {}}>
++              {steps >= 8000 ? 'Active' : 'Recovery'}
++            </span>
++          </div>
++        </div>
++      </div>
++
++      <h2 className="h2 mb-4">Next Workout</h2>
++      <div className="card">
++        <div className="flex justify-between items-start mb-4">
++          <div>
++            <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase.name}</span>
++            <h3 className="h3">{nextWorkout.name}</h3>
++            <p className="text-secondary text-sm">{nextWorkout.exercises.length} Exercises</p>
++          </div>
++        </div>
++        <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
++          Start Workout
++        </Link>
++      </div>
++    </div>
++  );
++}
++
++function WorkoutLog() {
++  const { db } = useData();
++  const [expandedSessionId, setExpandedSessionId] = useState(null);
++
++  // Sort and display the latest sessions we fetched from Context
++  // We need to map the session template_id back to actual workout names
++  const sessions = [...(db.sessions || [])].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
++
++  const formatShortDate = (isoString) => {
++    return new Date(isoString).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
++  };
++
++  const toggleExpand = (id) => {
++    if (expandedSessionId === id) setExpandedSessionId(null);
++    else setExpandedSessionId(id);
++  };
++
++  return (
++    <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
++      <header className="mb-6">
++        <h1 className="h1 mx-4 mt-4 mb-1">Workout Log</h1>
++        <p className="text-secondary mx-4">History of your completed sessions.</p>
++      </header>
++
++      <div className="flex-col gap-3 mx-4">
++        {sessions.length === 0 ? (
++          <div className="text-center text-muted text-sm mt-8">No workouts logged yet.</div>
++        ) : (
++          sessions.map(session => {
++            const template = db.workouts.find(w => w.id === session.template_id);
++            const templateName = template ? template.name : "Unknown Workout";
++            const isExpanded = expandedSessionId === session.id;
++            
++            // Group session sets by exercise ID to display
++            const setsByExercise = {};
++            if (session.sets) {
++              session.sets.forEach(s => {
++                if (!setsByExercise[s.exercise_id]) {
++                  setsByExercise[s.exercise_id] = [];
++                }
++                setsByExercise[s.exercise_id].push(s);
++              });
++            }
++
++            return (
++              <div key={session.id} className="card glass mb-3" style={{ padding: 0, overflow: 'hidden' }}>
++                <div 
++                  className="flex justify-between items-center p-4 cursor-pointer hover:bg-[var(--surface-hover)] transition-colors"
++                  style={{ background: isExpanded ? 'var(--surface-hover)' : 'transparent' }}
++                  onClick={() => toggleExpand(session.id)}
++                >
++                  <div>
++                    <h3 className="h3 mb-1 text-sm">{templateName}</h3>
++                    <p className="text-xs text-muted">{formatShortDate(session.created_at)}</p>
++                  </div>
++                  <div className="flex items-center gap-2">
++                    {session.notes && <span className="badge badge-success text-[10px]">Notes</span>}
++                    <span style={{ transform: isExpanded ? 'rotate(180deg)' : 'rotate(0deg)', transition: 'transform 0.2s', color: 'var(--text-muted)' }}>Ôû╝</span>
++                  </div>
++                </div>
++                
++                {isExpanded && (
++                  <div className="p-4" style={{ borderTop: '1px solid var(--surface-border)', background: 'rgba(0,0,0,0.1)' }}>
++                    {session.notes && (
++                      <div className="mb-4">
++                        <div className="text-xs text-secondary font-medium mb-1">Notes:</div>
++                        <div className="text-sm italic" style={{ borderLeft: '2px solid var(--accent-primary)', paddingLeft: '8px' }}>
++                          "{session.notes}"
++                        </div>
++                      </div>
++                    )}
++
++                    {(session.health_sleep_hours || session.health_steps) && (
++                      <div className="flex gap-2 mb-4">
++                        {session.health_sleep_hours && (
++                          <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
++                            ­ƒÆñ {session.health_sleep_hours}h
++                          </div>
++                        )}
++                        {session.health_steps && (
++                          <div className="badge text-xs" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }}>
++                            ­ƒæƒ {session.health_steps.toLocaleString()}
++                          </div>
++                        )}
++                      </div>
++                    )}
++                    
++                    {Object.keys(setsByExercise).length > 0 ? (
++                      <div className="flex-col gap-3">
++                        {Object.keys(setsByExercise).map(exId => {
++                          const exInfo = db.exercises[exId];
++                          const exName = exInfo ? exInfo.name : exId;
++                          const exSets = setsByExercise[exId];
++                          
++                          return (
++                            <div key={exId}>
++                              <div className="text-xs font-bold mb-1" style={{ color: 'var(--text-primary)' }}>{exName}</div>
++                              <div className="flex flex-wrap gap-2">
++                                {exSets.map((s, i) => (
++                                  <div key={i} className="badge text-[10px]" style={{ padding: '2px 6px', background: s.completed ? 'var(--surface-color)' : 'rgba(239, 68, 68, 0.1)', color: s.completed ? 'var(--text-secondary)' : 'var(--warning)', border: '1px solid var(--surface-border)' }}>
++                                    {s.weight}kg x {s.reps} {!s.completed && '(Missed)'}
++                                  </div>
++                                ))}
++                              </div>
++                            </div>
++                          );
++                        })}
++                      </div>
++                    ) : (
++                      <div className="text-xs text-muted">No exercises recorded for this session.</div>
++                    )}
++                  </div>
++                )}
++              </div>
++            );
++          })
++        )}
++      </div>
++    </div>
++  );
++}
++
++function WorkoutSelect() {
++  const { db } = useData();
++  const [selectedPhaseId, setSelectedPhaseId] = useState(db.phases[0].id);
++
++  return (
++    <div className="animate-fade-in" style={{ paddingBottom: '60px' }}>
++      <header className="mb-6">
++        <h1 className="h1 mb-1">Select Workout</h1>
++        <p className="text-secondary">Choose a workout from your plan.</p>
++      </header>
++
++      {/* Phase Selector */}
++      <div className="flex gap-2 mb-6" style={{ overflowX: 'auto', paddingBottom: '8px' }}>
++        {db.phases.map((phase) => (
++          <div 
++            key={phase.id}
++            onClick={() => setSelectedPhaseId(phase.id)}
++            style={{
++              flexShrink: 0,
++              padding: '6px 12px',
++              borderRadius: 'var(--radius-full)',
++              fontSize: '0.875rem',
++              fontWeight: 500,
++              cursor: 'pointer',
++              background: phase.id === selectedPhaseId ? 'var(--gradient-main)' : 'var(--surface-color)',
++              color: phase.id === selectedPhaseId ? 'white' : 'var(--text-secondary)',
++              border: `1px solid ${phase.id === selectedPhaseId ? 'transparent' : 'var(--surface-border)'}`
++            }}
++          >
++            {phase.name.split(' ')[0]} {phase.name.split(' ')[1]}
++          </div>
++        ))}
++      </div>
++
++      {/* Workout List */}
++      <div className="flex-col gap-3">
++        {db.workouts.filter(w => w.phaseId === selectedPhaseId).map(workout => (
++          <Link key={workout.id} to={`/workouts/new?id=${workout.id}`}>
++            <div className="card glass flex justify-between items-center hover:var(--surface-hover) transition-colors p-4">
++              <div>
++                <h3 className="h3 mb-1 text-sm">{workout.name}</h3>
++                <p className="text-xs text-muted">{workout.exercises.length} Exercises</p>
++              </div>
++              <Plus size={20} className="text-accent-primary" />
++            </div>
++          </Link>
++        ))}
++      </div>
++    </div>
++  );
++}
++
++function Layout() {
++  const { loading, error } = useData();
++
++  if (loading) {
++    return (
++      <div className="app-container flex items-center justify-center p-6 text-center">
++        <div className="animate-fade-in">
++          <Activity size={48} className="text-accent-primary mb-4 mx-auto" />
++          <h2 className="h2 mb-2">Syncing Data</h2>
++          <p className="text-secondary">Loading your workouts from the cloud...</p>
++        </div>
++      </div>
++    );
++  }
++
++  if (error) {
++    return (
++      <div className="app-container flex items-center justify-center p-6 text-center">
++        <div>
++          <h2 className="h2 text-warning mb-2">Connection Error</h2>
++          <p className="text-secondary">{error}</p>
++        </div>
++      </div>
++    );
++  }
++
++  return (
++    <div className="app-container">
++      <main className="main-content">
++        <Routes>
++          <Route path="/" element={<Dashboard />} />
++          <Route path="/workouts" element={<WorkoutLog />} />
++          <Route path="/workouts/select" element={<WorkoutSelect />} />
++          <Route path="/workouts/new" element={<NewWorkout />} />
++          <Route path="/progress" element={<Progress />} />
++          <Route path="/profile" element={<div className="p-4"><h1 className="h1">Profile</h1><p className="text-secondary mb-6">Manage your account and connections.</p><button className="btn w-full" style={{ background: 'var(--surface-color)', border: '1px solid var(--surface-border)' }} onClick={() => supabase.auth.signOut()}>Sign Out</button></div>} />
++        </Routes>
++      </main>
++      <BottomNav />
++    </div>
++  );
++}
++
++function App() {
++  const [session, setSession] = useState(null);
++  const [authLoading, setAuthLoading] = useState(true);
++
++  useEffect(() => {
++    supabase.auth.getSession().then(({ data: { session } }) => {
++      setSession(session);
++      setAuthLoading(false);
++    });
++
++    const {
++      data: { subscription },
++    } = supabase.auth.onAuthStateChange((_event, session) => {
++      setSession(session);
++    });
++
++    return () => subscription.unsubscribe();
++  }, []);
++
++  if (authLoading) {
++    return <div className="app-container flex items-center justify-center min-h-screen"><Activity size={48} className="text-accent-primary animate-pulse" /></div>;
++  }
++
++  if (!session) {
++    return <Login />;
++  }
++
++  return (
++    <BrowserRouter>
++      <Layout />
++    </BrowserRouter>
++  );
++}
++
++export default App;
