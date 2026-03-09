@@ -7,6 +7,7 @@ import { useToast } from '../components/Toast';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchGoogleFitData } from '../lib/googleFit';
 import { supabase } from '../lib/supabase';
+import ReadinessWidget from '../components/ReadinessWidget';
 
 export default function Dashboard() {
   const { db, loadData, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
@@ -235,6 +236,8 @@ export default function Dashboard() {
           <img src={`https://ui-avatars.com/api/?name=${encodeURIComponent(displayName)}&background=3b82f6&color=fff`} alt="User" style={{ borderRadius: '50%', width: '48px', height: '48px' }} />
         </Link>
       </div>
+
+      <ReadinessWidget healthMetrics={db.healthMetrics} sessions={db.sessions} />
 
       <div className="card mb-6 glass">
         <h2 className="h3 flex justify-between items-center mb-2">
