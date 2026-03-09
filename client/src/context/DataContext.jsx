@@ -472,10 +472,15 @@ export function DataProvider({ children }) {
 
     const sessionsToInsert = newSessions.map(s => {
       let paceStr = '';
+      let minStr = '';
+      let secStr = '';
+      
       if (s.distanceMeters > 0 && s.durationMinutes > 0) {
         const pace = s.durationMinutes / (s.distanceMeters / 1000);
         const min = Math.floor(pace);
         const sec = Math.round((pace % 1) * 60).toString().padStart(2, '0');
+        minStr = min;
+        secStr = sec;
         paceStr = ` | Tempo: ${min}:${sec} min/km`;
       }
 
@@ -488,7 +493,7 @@ export function DataProvider({ children }) {
         calories: s.calories,
         distance_meters: s.distanceMeters,
         steps: s.steps,
-        notes: paceStr ? `Tempo: ${min}:${sec} min/km` : ''
+        notes: paceStr ? `Tempo: ${minStr}:${secStr} min/km` : ''
       };
     });
 
