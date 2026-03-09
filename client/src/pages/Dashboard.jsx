@@ -13,10 +13,18 @@ export default function Dashboard() {
   const { db, loadData, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
   const toast = useToast();
-  const [gfitToken, setGfitToken] = useState(null);
-  const [isGoogleConnected, setIsGoogleConnected] = useState(false);
+  const [gfitToken, setGfitToken] = useState(() => {
+    const saved = localStorage.getItem('gfit_access_token');
+    const expiresAt = localStorage.getItem('gfit_expires_at');
+    if (saved && expiresAt && Date.now() < parseInt(expiresAt)) {
+      return saved;
+    }
+    return null;
+  });
+  const [isGoogleConnected, setIsGoogleConnected] = useState(!!gfitToken);
   const [googleLoading, setGoogleLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
+  const [autoSyncAttempted, setAutoSyncAttempted] = useState(false);
 
   // Inline editing state
   const [editingField, setEditingField] = useState(null); // 'sleep' | 'steps' | 'weight'
@@ -132,15 +140,19 @@ export default function Dashboard() {
       setTimeout(() => setSyncStatus(null), 3000);
     } catch (err) {
       console.error('Google Fit sync failed:', err);
-      setGfitToken(null);
-      setIsGoogleConnected(false);
-      setSyncStatus('error');
       if (err.message === 'Unauthorized' || err.message === 'Forbidden') {
+        setGfitToken(null);
+        setIsGoogleConnected(false);
+        localStorage.removeItem('gfit_access_token');
+        localStorage.removeItem('gfit_expires_at');
+        setSyncStatus('error');
         toast.error('Session expired — reconnecting to Google Fit...');
         setTimeout(() => loginGoogleFit(), 500);
       } else if (err.message?.includes('fetch') || err.message?.includes('network') || !navigator.onLine) {
+        setSyncStatus('error');
         toast.error('Network error — check your connection and try again.');
       } else {
+        setSyncStatus('error');
         toast.error('Google Fit sync failed: ' + (err.message || 'Unknown error'));
       }
     } finally {
@@ -150,13 +162,31 @@ export default function Dashboard() {
 
   const loginGoogleFit = useGoogleLogin({
     onSuccess: async (tokenResponse) => {
-      setGfitToken(tokenResponse.access_token);
+      const token = tokenResponse.access_token;
+      const expiresAt = Date.now() + (tokenResponse.expires_in * 1000);
+      
+      setGfitToken(token);
       setIsGoogleConnected(true);
-      await syncGoogleFit(tokenResponse.access_token);
+      localStorage.setItem('gfit_access_token', token);
+      localStorage.setItem('gfit_expires_at', expiresAt.toString());
+      
+      await syncGoogleFit(token);
     },
     scope: 'https://www.googleapis.com/auth/fitness.activity.read https://www.googleapis.com/auth/fitness.sleep.read https://www.googleapis.com/auth/fitness.body.read https://www.googleapis.com/auth/fitness.heart_rate.read https://www.googleapis.com/auth/fitness.location.read',
-    onError: error => console.error('Login Failed:', error)
+    onError: error => {
+      console.error('Login Failed:', error);
+      setIsGoogleConnected(false);
+      setGfitToken(null);
+    }
   });
+
+  // Auto-sync on mount if we have a valid token
+  React.useEffect(() => {
+    if (gfitToken && !autoSyncAttempted && !loadingHealth) {
+      setAutoSyncAttempted(true);
+      syncGoogleFit(gfitToken);
+    }
+  }, [gfitToken, autoSyncAttempted, loadingHealth]);
 
   const handleSyncNow = async () => {
     if (gfitToken) {
