@@ -9,6 +9,8 @@ import { fetchGoogleFitData } from '../lib/googleFit';
 import { supabase } from '../lib/supabase';
 import ReadinessWidget from '../components/ReadinessWidget';
 
+const SYNC_INTERVAL = 30 * 60 * 1000; // 30 minutes
+
 export default function Dashboard() {
   const { db, loadData, saveDailyHealthMetric, syncExternalSessions, loadingCatalog, loadingSessions, loadingHealth } = useData();
   const { preferences: prefs, loading: prefsLoading } = usePreferences();
@@ -135,6 +137,7 @@ export default function Dashboard() {
       }
 
       setSyncStatus('success');
+      localStorage.setItem('gfit_last_sync', Date.now().toString());
       const saved = daysToSave.length;
       toast.success(saved > 0 ? `Google Fit synced (${saved} new day${saved > 1 ? 's' : ''})` : 'Already up to date');
       setTimeout(() => setSyncStatus(null), 3000);
@@ -180,11 +183,19 @@ export default function Dashboard() {
     }
   });
 
-  // Auto-sync on mount if we have a valid token
+  // Auto-sync on mount if we have a valid token and interval has passed
   React.useEffect(() => {
     if (gfitToken && !autoSyncAttempted && !loadingHealth) {
+      const lastSync = localStorage.getItem('gfit_last_sync');
+      const shouldSync = !lastSync || (Date.now() - parseInt(lastSync) > SYNC_INTERVAL);
+      
       setAutoSyncAttempted(true);
-      syncGoogleFit(gfitToken);
+      
+      if (shouldSync) {
+        syncGoogleFit(gfitToken);
+      } else {
+        console.log(`[Google Fit] Skipping auto-sync. Last sync was less than ${SYNC_INTERVAL / 60000} mins ago.`);
+      }
     }
   }, [gfitToken, autoSyncAttempted, loadingHealth]);
 
