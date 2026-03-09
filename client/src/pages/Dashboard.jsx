@@ -237,7 +237,7 @@ export default function Dashboard() {
         </Link>
       </div>
 
-      <ReadinessWidget healthMetrics={db.healthMetrics} sessions={db.sessions} />
+      <ReadinessWidget healthMetrics={db.healthMetrics} sessions={db.sessions} prefs={prefs} />
 
       <div className="card mb-6 glass">
         <h2 className="h3 flex justify-between items-center mb-2">

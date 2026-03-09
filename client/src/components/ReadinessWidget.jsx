@@ -2,11 +2,11 @@ import React, { useState } from 'react'
 import { Activity, Beaker, BedSingle, ChevronDown, ChevronUp, Footprints } from 'lucide-react'
 import { calculateReadinessScore, getReadinessSuggestion } from '../lib/readiness'
 
-export default function ReadinessWidget({ healthMetrics, sessions }) {
+export default function ReadinessWidget({ healthMetrics, sessions, prefs }) {
   const [expanded, setExpanded] = useState(false)
   
   // Przelicz wynik i ewaluację
-  const { score, breakdown } = calculateReadinessScore(healthMetrics, sessions)
+  const { score, breakdown } = calculateReadinessScore(healthMetrics, sessions, prefs)
   const suggestion = getReadinessSuggestion(score)
 
   return (

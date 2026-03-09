@@ -1,4 +1,4 @@
-export function calculateReadinessScore(healthMetrics = [], sessions = []) {
+export function calculateReadinessScore(healthMetrics = [], sessions = [], prefs = {}) {
   if (!healthMetrics || healthMetrics.length === 0) return 0
 
   const now = new Date()
@@ -16,9 +16,9 @@ export function calculateReadinessScore(healthMetrics = [], sessions = []) {
   const todayMetric = healthMetrics.find(m => m.date === todayStr) || 
                       last30DaysMetrics[0] || {} // Opadamy na "wczoraj" jeśli dzisiejszych jeszcze nie ma
 
-  // 1. Sen (waga: 35%) - cel 7.5h (450 minut)
+  // 1. Sen (waga: 35%) - cel 7.5h (450 minut) lub wg preferencji
   let sleepScore = 0
-  const sleepTargetHours = 7.5
+  const sleepTargetHours = prefs?.sleep_goal || 7.5
   if (todayMetric.sleep_hours) {
     // 0 do 100 procent z 7.5h, nakładana maxymalna czapka 100 (zbyt dużo snu ma ten sam wynik)
     const ratio = Math.min(todayMetric.sleep_hours / sleepTargetHours, 1)
@@ -79,9 +79,9 @@ export function calculateReadinessScore(healthMetrics = [], sessions = []) {
     restScore = 20
   }
 
-  // 4. Kroki z poprzedniego dnia (waga: 20%) - cel 8000
+  // 4. Kroki z poprzedniego dnia (waga: 20%) - cel 8000 lub wg preferencji
   let stepsScore = 0
-  const stepsTarget = 8000
+  const stepsTarget = prefs?.step_goal || 8000
   
   // Bierzemy dane sprzed dzisiaj
   const yesterdayMetric = last30DaysMetrics.find(m => {
