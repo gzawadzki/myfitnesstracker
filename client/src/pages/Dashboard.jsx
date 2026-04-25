@@ -477,7 +477,10 @@ export default function Dashboard() {
         <div className="card glass text-center p-6">
           <Activity size={40} className="mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
           <h3 className="h3 mb-2">No workouts available</h3>
-          <p className="text-sm text-secondary mb-0">Import your training plan to get started.</p>
+          <p className="text-sm text-secondary mb-4">Create your first workout plan to get started.</p>
+          <Link to="/plan" className="btn btn-primary text-center" style={{ display: 'inline-flex' }}>
+            Create Workout Plan
+          </Link>
         </div>
       )}
     </div>

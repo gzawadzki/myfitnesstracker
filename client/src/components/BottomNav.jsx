@@ -1,6 +1,6 @@
 import React, { useState, useEffect } from 'react';
 import { Link, useLocation } from 'react-router-dom';
-import { Home, LineChart, Activity, Plus, HeartPulse, Play } from 'lucide-react';
+import { Home, LineChart, Activity, Plus, HeartPulse, Play, ClipboardList } from 'lucide-react';
 
 export default function BottomNav() {
   const location = useLocation();
@@ -59,6 +59,10 @@ export default function BottomNav() {
         <Link to="/workouts" className={`nav-item ${path === '/workouts' && !path.includes('/new') && !path.includes('/select') ? 'active' : ''}`}>
           <Activity size={24} />
           <span>Log</span>
+        </Link>
+        <Link to="/plan" className={`nav-item ${path === '/plan' ? 'active' : ''}`}>
+          <ClipboardList size={24} />
+          <span>Plan</span>
         </Link>
         <div style={{ position: 'relative', top: '-15px' }}>
           <Link to="/workouts/select" className="btn btn-primary btn-icon" style={{ padding: '12px', boxShadow: 'var(--shadow-lg)' }}>

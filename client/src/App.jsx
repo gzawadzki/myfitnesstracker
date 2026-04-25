@@ -13,6 +13,7 @@ import NewWorkout from './pages/NewWorkout';
 import Progress from './pages/Progress';
 import Health from './pages/Health';
 import ProfilePage from './pages/Profile';
+import WorkoutPlan from './pages/WorkoutPlan';
 
 function Layout({ session }) {
   const { appReady, error } = useData();
@@ -51,6 +52,7 @@ function Layout({ session }) {
           <Route path="/workouts/new" element={<NewWorkout />} />
           <Route path="/progress" element={<Progress />} />
           <Route path="/health" element={<Health />} />
+          <Route path="/plan" element={<WorkoutPlan />} />
           <Route path="/profile" element={<ProfilePage session={session} />} />
         </Routes>
       </main>

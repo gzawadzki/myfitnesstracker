@@ -517,6 +517,76 @@ export function DataProvider({ children }) {
     }
   };
 
+  // ─── Workout Plan CRUD ────────────────────────────────────
+
+  const savePhase = async (id, name, orderIndex) => {
+    const phaseId = id || `phase_${crypto.randomUUID().slice(0, 8)}`;
+    const { error } = await supabase
+      .from('phases')
+      .upsert({ id: phaseId, name, order_index: orderIndex }, { onConflict: 'id' });
+    if (error) throw error;
+    await loadData(true);
+    return phaseId;
+  };
+
+  const deletePhase = async (phaseId) => {
+    // Delete template_exercises for all workouts in this phase first
+    const { data: templates } = await supabase
+      .from('workout_templates')
+      .select('id')
+      .eq('phase_id', phaseId);
+    
+    if (templates && templates.length > 0) {
+      const templateIds = templates.map(t => t.id);
+      await supabase.from('template_exercises').delete().in('workout_id', templateIds);
+      await supabase.from('workout_templates').delete().eq('phase_id', phaseId);
+    }
+
+    const { error } = await supabase.from('phases').delete().eq('id', phaseId);
+    if (error) throw error;
+    await loadData(true);
+  };
+
+  const saveWorkoutTemplate = async (id, phaseId, name) => {
+    const templateId = id || `w_${crypto.randomUUID().slice(0, 8)}`;
+    const { error } = await supabase
+      .from('workout_templates')
+      .upsert({ id: templateId, phase_id: phaseId, name }, { onConflict: 'id' });
+    if (error) throw error;
+    await loadData(true);
+    return templateId;
+  };
+
+  const deleteWorkoutTemplate = async (templateId) => {
+    await supabase.from('template_exercises').delete().eq('workout_id', templateId);
+    const { error } = await supabase.from('workout_templates').delete().eq('id', templateId);
+    if (error) throw error;
+    await loadData(true);
+  };
+
+  const saveTemplateExercises = async (workoutId, exercises) => {
+    // Replace all exercise mappings: delete existing, insert new
+    const { error: delErr } = await supabase
+      .from('template_exercises')
+      .delete()
+      .eq('workout_id', workoutId);
+    if (delErr) throw delErr;
+
+    if (exercises.length > 0) {
+      const rows = exercises.map((ex, idx) => ({
+        workout_id: workoutId,
+        exercise_id: ex.exerciseId,
+        target_sets: ex.targetSets,
+        target_reps: ex.targetReps,
+        order_index: idx
+      }));
+      const { error: insErr } = await supabase.from('template_exercises').insert(rows);
+      if (insErr) throw insErr;
+    }
+
+    await loadData(true);
+  };
+
   return (
     <DataContext.Provider value={{
       db,
@@ -535,7 +605,12 @@ export function DataProvider({ children }) {
       createExercise,
       syncExternalSessions,
       loadMoreSessions,
-      hasMoreSessions
+      hasMoreSessions,
+      savePhase,
+      deletePhase,
+      saveWorkoutTemplate,
+      deleteWorkoutTemplate,
+      saveTemplateExercises
     }}>
       {children}
     </DataContext.Provider>
