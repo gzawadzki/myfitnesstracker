@@ -1,36 +1,43 @@
-// Client helpers for the Google Health API v4 sync.
+// Client helpers for the Google Health API v4 sync (Vercel serverless backend).
 //
-// Unlike the old googleFit.js, the browser NEVER fetches health data or stores a token.
-// It only: (1) hands the OAuth auth-code to the `google-health-connect` Edge Function, which
-// stores the refresh token server-side, and (2) asks `sync-google-health` to run.
+// The browser NEVER fetches health data or stores a Google token. It only:
+//   1. hands the OAuth auth-code to /api/google-health/connect (stores the refresh token server-side)
+//   2. asks /api/google-health/sync to run.
+// Both calls carry the user's Supabase JWT so the API route knows who they are.
 //
-// The OAuth popup itself is triggered by `useGoogleLogin({ flow: 'auth-code', ... })` inside the
-// component (hooks can't live in a plain module) — see docs/google-health-sync.md, Step 4.
-// Request these scopes there:
+// The OAuth popup is triggered by useGoogleLogin({ flow: 'auth-code', scope: GOOGLE_HEALTH_SCOPES })
+// inside the component (hooks can't live in a plain module) — see Dashboard.jsx.
+
+import { supabase } from './supabase';
+
 export const GOOGLE_HEALTH_SCOPES = [
-  "https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly",
-  "https://www.googleapis.com/auth/googlehealth.sleep.readonly",
-  "https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly",
-].join(" ");
+  'https://www.googleapis.com/auth/googlehealth.activity_and_fitness.readonly',
+  'https://www.googleapis.com/auth/googlehealth.sleep.readonly',
+  'https://www.googleapis.com/auth/googlehealth.health_metrics_and_measurements.readonly',
+].join(' ');
 
-import { supabase } from "./supabase";
-
-/** Send the OAuth authorization code to the backend, which exchanges + stores the refresh token. */
-export async function connectGoogleHealth(code) {
-  const { data, error } = await supabase.functions.invoke("google-health-connect", {
-    body: { code },
+async function authedPost(path, payload) {
+  const { data: { session } } = await supabase.auth.getSession();
+  const token = session?.access_token;
+  const resp = await fetch(path, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify(payload || {}),
   });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
+  const data = await resp.json().catch(() => ({}));
+  if (!resp.ok || data.error) throw new Error(data.error || `HTTP ${resp.status}`);
   return data;
 }
 
+/** Exchange the OAuth auth-code + store the refresh token server-side. */
+export function connectGoogleHealth(code) {
+  return authedPost('/api/google-health/connect', { code });
+}
+
 /** Trigger a server-side sync for the current user. Returns { savedDays, savedSessions }. */
-export async function syncGoogleHealth(daysBack = 7) {
-  const { data, error } = await supabase.functions.invoke("sync-google-health", {
-    body: { daysBack },
-  });
-  if (error) throw error;
-  if (data?.error) throw new Error(data.error);
-  return data;
+export function syncGoogleHealth(daysBack = 7) {
+  return authedPost('/api/google-health/sync', { daysBack });
 }
