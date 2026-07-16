@@ -1,11 +1,12 @@
 import React, { useState } from 'react';
 import { Link } from 'react-router-dom';
-import { AlertTriangle, Activity } from 'lucide-react';
+import { AlertTriangle, Activity, ChevronDown } from 'lucide-react';
 import { useData } from '../context/DataContext';
 import { usePreferences } from '../hooks/usePreferences';
 import { useToast } from '../components/Toast';
 import { useGoogleLogin } from '@react-oauth/google';
 import { fetchGoogleFitData } from '../lib/googleFit';
+import { connectGoogleHealth, syncGoogleHealth, GOOGLE_HEALTH_SCOPES } from '../lib/googleHealth';
 import { supabase } from '../lib/supabase';
 import ReadinessWidget from '../components/ReadinessWidget';
 
@@ -27,11 +28,13 @@ export default function Dashboard() {
   const [googleLoading, setGoogleLoading] = useState(false);
   const [syncStatus, setSyncStatus] = useState(null);
   const [autoSyncAttempted, setAutoSyncAttempted] = useState(false);
+  const [isHealthConnected, setIsHealthConnected] = useState(() => localStorage.getItem('gh_connected') === '1');
 
   // Inline editing state
   const [editingField, setEditingField] = useState(null); // 'sleep' | 'steps' | 'weight'
   const [editValue, setEditValue] = useState('');
   const [savedField, setSavedField] = useState(null);
+  const [metricsExpanded, setMetricsExpanded] = useState(false);
 
   const todayRaw = new Date();
   const offset = todayRaw.getTimezoneOffset() * 60000;
@@ -183,27 +186,78 @@ export default function Dashboard() {
     }
   });
 
-  // Auto-sync on mount if we have a valid token and interval has passed
+  // Google Health: auth-code popup → backend stores the refresh token → first sync.
+  const connectHealth = useGoogleLogin({
+    flow: 'auth-code',
+    scope: GOOGLE_HEALTH_SCOPES,
+    onSuccess: async ({ code }) => {
+      setGoogleLoading(true);
+      setSyncStatus(null);
+      try {
+        await connectGoogleHealth(code);
+        localStorage.setItem('gh_connected', '1');
+        setIsHealthConnected(true);
+        const r = await syncGoogleHealth();
+        localStorage.setItem('gh_last_sync', Date.now().toString());
+        setSyncStatus('success');
+        toast.success(r?.savedDays ? `Google Health: synced ${r.savedDays} day(s)` : 'Connected to Google Health');
+        setTimeout(() => setSyncStatus(null), 3000);
+        await loadData(true);
+      } catch (err) {
+        setSyncStatus('error');
+        toast.error('Google Health: ' + (err.message || 'connection failed'));
+      } finally {
+        setGoogleLoading(false);
+      }
+    },
+    onError: () => { setSyncStatus('error'); toast.error('Google Health connection failed'); },
+  });
+
+  // Auto-sync on mount if connected and the interval has passed.
   React.useEffect(() => {
-    if (gfitToken && !autoSyncAttempted && !loadingHealth) {
-      const lastSync = localStorage.getItem('gfit_last_sync');
+    if (isHealthConnected && !autoSyncAttempted && !loadingHealth) {
+      const lastSync = localStorage.getItem('gh_last_sync');
       const shouldSync = !lastSync || (Date.now() - parseInt(lastSync) > SYNC_INTERVAL);
-      
       setAutoSyncAttempted(true);
-      
       if (shouldSync) {
-        syncGoogleFit(gfitToken);
-      } else {
-        console.log(`[Google Fit] Skipping auto-sync. Last sync was less than ${SYNC_INTERVAL / 60000} mins ago.`);
+        syncGoogleHealth()
+          .then((r) => {
+            localStorage.setItem('gh_last_sync', Date.now().toString());
+            if (r?.savedDays) loadData(true);
+          })
+          .catch((err) => {
+            if (String(err.message || '').toLowerCase().includes('refresh')) {
+              localStorage.removeItem('gh_connected');
+              setIsHealthConnected(false);
+            }
+          });
       }
     }
-  }, [gfitToken, autoSyncAttempted, loadingHealth]);
+  }, [isHealthConnected, autoSyncAttempted, loadingHealth]);
 
   const handleSyncNow = async () => {
-    if (gfitToken) {
-      await syncGoogleFit(gfitToken);
-    } else {
-      loginGoogleFit();
+    if (!isHealthConnected) { connectHealth(); return; }
+    setGoogleLoading(true);
+    setSyncStatus(null);
+    try {
+      const r = await syncGoogleHealth();
+      localStorage.setItem('gh_last_sync', Date.now().toString());
+      setSyncStatus('success');
+      toast.success(r?.savedDays ? `Synced ${r.savedDays} day(s)` : 'Already up to date');
+      setTimeout(() => setSyncStatus(null), 3000);
+      await loadData(true);
+    } catch (err) {
+      const msg = String(err.message || '').toLowerCase();
+      if (msg.includes('refresh') || msg.includes('session')) {
+        localStorage.removeItem('gh_connected');
+        setIsHealthConnected(false);
+        connectHealth();
+      } else {
+        setSyncStatus('error');
+        toast.error('Sync: ' + (err.message || 'failed'));
+      }
+    } finally {
+      setGoogleLoading(false);
     }
   };
 
@@ -280,28 +334,75 @@ export default function Dashboard() {
 
       <ReadinessWidget healthMetrics={db.healthMetrics} sessions={db.sessions} prefs={prefs} />
 
-      <div className="card mb-6 glass">
-        <h2 className="h3 flex justify-between items-center mb-2">
-          Today's Readiness
+      {/* Primary action — start today's session */}
+      <section className="mb-8">
+        <h2 className="h2 mb-3">Next Workout</h2>
+        {nextWorkout ? (
+          <div className="card">
+            <div className="flex justify-between items-start mb-4">
+              <div>
+                <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase?.name}</span>
+                <h3 className="h3">{nextWorkout.name}</h3>
+                <p className="text-secondary text-sm">{nextWorkout.exercises?.length} Exercises</p>
+              </div>
+            </div>
+            <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
+              Start Workout
+            </Link>
+          </div>
+        ) : (
+          <div className="card glass text-center p-6">
+            <Activity size={40} className="mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
+            <h3 className="h3 mb-2">No workouts available</h3>
+            <p className="text-sm text-secondary mb-4">Create your first workout plan to get started.</p>
+            <Link to="/plan" className="btn btn-primary text-center" style={{ display: 'inline-flex' }}>
+              Create Workout Plan
+            </Link>
+          </div>
+        )}
+      </section>
+
+      {/* Secondary — today's metrics log (collapsible) */}
+      <section>
+        <div className="card glass">
+          <div className="flex items-center justify-between gap-3 mb-2">
+            <button
+              type="button"
+              onClick={() => setMetricsExpanded(v => !v)}
+              className="flex flex-col items-start flex-1"
+              style={{ minWidth: 0 }}
+              aria-expanded={metricsExpanded}
+            >
+              <span className="h3 mb-0 flex items-center gap-2">
+                Today's Metrics
+                <ChevronDown size={18} style={{ color: 'var(--text-muted)', transition: 'transform 0.2s ease', transform: metricsExpanded ? 'rotate(180deg)' : 'none' }} />
+              </span>
+              {!metricsExpanded && (
+                <span className="text-xs text-muted mt-1" style={{ maxWidth: '100%', whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis' }}>
+                  Sleep {formatSleep(sleep)} · {steps > 0 ? steps.toLocaleString() : '—'} steps · {weight > 0 ? `${weight}kg` : '— kg'}
+                </span>
+              )}
+            </button>
           <div className="flex flex-col items-end gap-1">
             <button 
               className="badge text-xs px-2 py-1 cursor-pointer"
-              style={{ 
-                background: isGoogleConnected ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)', 
-                color: isGoogleConnected ? 'var(--success)' : 'var(--text-primary)', 
-                border: `1px solid ${isGoogleConnected ? 'rgba(16, 185, 129, 0.3)' : 'var(--surface-border)'}` 
+              style={{
+                background: isHealthConnected ? 'rgba(16, 185, 129, 0.1)' : 'var(--surface-color)',
+                color: isHealthConnected ? 'var(--success)' : 'var(--text-primary)',
+                border: `1px solid ${isHealthConnected ? 'rgba(16, 185, 129, 0.3)' : 'var(--surface-border)'}`
               }}
               onClick={handleSyncNow}
               disabled={googleLoading}
             >
-              {googleLoading ? 'Syncing...' : isGoogleConnected ? '↻ Sync Now' : 'Connect Google Fit'}
+              {googleLoading ? 'Syncing...' : isHealthConnected ? '↻ Sync Now' : 'Connect Google Health'}
             </button>
             {syncStatus === 'success' && <span className="text-[10px] text-success">Synced ✓</span>}
             {syncStatus === 'error' && <span className="text-[10px] text-warning">Token expired — tap to reconnect</span>}
           </div>
-        </h2>
+          </div>
 
-
+          {metricsExpanded && (
+            <>
         <div className="flex justify-between mt-4">
           {/* Sleep */}
           <div className="flex-col items-center flex-1 text-center" onClick={() => editingField !== 'sleep' && startEdit('sleep', sleep)} style={{ cursor: 'pointer' }}>
@@ -457,32 +558,10 @@ export default function Dashboard() {
             </span>
           </div>
         </div>
-      </div>
-
-      <h2 className="h2 mb-4">Next Workout</h2>
-      {nextWorkout ? (
-        <div className="card">
-          <div className="flex justify-between items-start mb-4">
-            <div>
-              <span className="badge mb-2 text-gradient font-bold" style={{ backgroundColor: 'rgba(59, 130, 246, 0.15)' }}>{nextPhase?.name}</span>
-              <h3 className="h3">{nextWorkout.name}</h3>
-              <p className="text-secondary text-sm">{nextWorkout.exercises?.length} Exercises</p>
-            </div>
-          </div>
-          <Link to={`/workouts/new?id=${nextWorkout.id}`} className="btn btn-primary btn-block text-center mt-2">
-            Start Workout
-          </Link>
+            </>
+          )}
         </div>
-      ) : (
-        <div className="card glass text-center p-6">
-          <Activity size={40} className="mx-auto mb-3" style={{ color: 'var(--text-muted)', opacity: 0.4 }} />
-          <h3 className="h3 mb-2">No workouts available</h3>
-          <p className="text-sm text-secondary mb-4">Create your first workout plan to get started.</p>
-          <Link to="/plan" className="btn btn-primary text-center" style={{ display: 'inline-flex' }}>
-            Create Workout Plan
-          </Link>
-        </div>
-      )}
+      </section>
     </div>
   );
 }
