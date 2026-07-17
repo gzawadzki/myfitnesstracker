@@ -6,8 +6,15 @@
 
 import { createClient } from '@supabase/supabase-js';
 
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GOOGLE_HEALTH_CLIENT_ID', 'GOOGLE_HEALTH_CLIENT_SECRET'];
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+  if (missing.length) {
+    return res.status(500).json({ error: `Server misconfigured: missing env ${missing.join(', ')} — set in Vercel and redeploy` });
+  }
 
   const jwt = (req.headers.authorization || '').replace('Bearer ', '');
   if (!jwt) return res.status(401).json({ error: 'Missing Authorization' });

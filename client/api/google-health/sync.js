@@ -28,8 +28,15 @@ const intervalEnd = (o) => Date.parse(o?.interval?.endTime ?? o?.interval?.start
 const sampleMs = (o) => Date.parse(o?.sampleTime?.physicalTime);
 const civilMs = (d) => (d ? Date.UTC(d.year, d.month - 1, d.day, 12) : NaN);
 
+const REQUIRED_ENV = ['SUPABASE_URL', 'SUPABASE_SERVICE_ROLE_KEY', 'GOOGLE_HEALTH_CLIENT_ID', 'GOOGLE_HEALTH_CLIENT_SECRET'];
+
 export default async function handler(req, res) {
   if (req.method !== 'POST') return res.status(405).json({ error: 'Method not allowed' });
+
+  const missing = REQUIRED_ENV.filter((k) => !process.env[k]);
+  if (missing.length) {
+    return res.status(500).json({ error: `Server misconfigured: missing env ${missing.join(', ')} — set in Vercel and redeploy` });
+  }
 
   const admin = createClient(process.env.SUPABASE_URL, process.env.SUPABASE_SERVICE_ROLE_KEY);
   const days = Number(req.body?.daysBack) > 0 ? Number(req.body.daysBack) : 7;
